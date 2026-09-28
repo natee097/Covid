@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EOD Signal Desk v7.0</title>
+<title>EOD Signal Desk v7.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -144,7 +144,7 @@ button.b.sm{padding:4px 10px;font-size:12px}
 <div class="wrap">
 <header class="top">
   <div class="ttl">
-    <div class="brand">EOD Signal Desk &nbsp;·&nbsp; v7.0</div>
+    <div class="brand">EOD Signal Desk &nbsp;·&nbsp; v7.1</div>
     <h1>ระบบสัญญาณ EOD — หุ้นไทยทั้งกระดาน</h1>
     <div class="sub">ซื้อเมื่อทำจุดสูงสุดใหม่ 20 วันและอยู่เหนือเฉลี่ย 50 วัน &nbsp;·&nbsp; ขายเมื่อหลุดเฉลี่ย 50 วันหรือหลุด stop &nbsp;·&nbsp; ซื้อใหม่เฉพาะตอนดัชนีอยู่เหนือเฉลี่ย 200 วัน</div>
     <div id="saveBar"></div>
@@ -576,6 +576,17 @@ button.b.sm{padding:4px 10px;font-size:12px}
   </div>
 
   <div class="card">
+    <h2>ส่งออกข้อมูลสำหรับวิจัย (แบ่งไฟล์ไม่เกิน 25 MB)</h2>
+    <div class="hint">ใช้ส่งข้อมูลย้อนหลังให้ผู้ช่วยวิจัยกฎเทรด — เลือกไฟล์ชุดปี 1970 (และชุดต้นปีถ้าต้องการ) ระบบจะอ่าน กรองเหลือเฉพาะหุ้นสามัญไทยทุกตัวที่เคยซื้อขาย (รวมตัวที่เลิกกิจการหรือถูกถอนไปแล้ว) กับดัชนี SET, SET50, SET100, MAI ตัด DW, DR, warrant และ odd lot ออก แล้วแบ่งเป็นไฟล์ .zip ละไม่เกิน 25 MB ให้ดาวน์โหลดทีละไฟล์ · ไม่แตะข้อมูลในระบบ</div>
+    <div class="row" style="margin-top:10px">
+      <div style="max-width:170px"><label>ตั้งแต่ปี ค.ศ.</label><input id="rxFrom" type="number" value="2005" step="1"></div>
+      <div style="flex:none"><button class="b" onclick="document.getElementById('rxFiles').click()">เลือกไฟล์ EOD แล้วส่งออก</button><input id="rxFiles" type="file" multiple accept=".zip,.csv" hidden onchange="exportResearch(this.files);this.value=''"></div>
+    </div>
+    <div class="msg" id="rxMsg"></div>
+    <div id="rxOut" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h2>รายละเอียดข้อมูลในระบบ</h2>
     <div id="healthBox"></div>
   </div>
@@ -611,7 +622,7 @@ button.b.sm{padding:4px 10px;font-size:12px}
 <script>
 'use strict';
 /* ---------- state ---------- */
-const VERSION='6.0';
+const VERSION='7.1';
 const UNIV_VER=2;            // เปลี่ยนเมื่อเกณฑ์คัดหุ้นเปลี่ยน (v6.0 ตัด DR/กองทุน) — ใช้เตือนให้โหลด EOD ใหม่
 const DEFAULT_EXCL='VAYU1,TIF1,MNIT2,GLD,TDEX,LHHOTEL,WHART,WHAIR,IMPACT,PROSPECT,AIMIRT,AXTRART,FUTURERT,SIRIPRT,SSTRT';
 const DEFAULT_RULES={rs:false,ladder:false,corr:false,liq:false,gap:false,even:false,trend:false,
@@ -3341,6 +3352,97 @@ document.addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(
 document.addEventListener('dragover',e=>{e.preventDefault()});
 document.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;document.body.classList.remove('dragging');
   const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])];if(fs.length)importFiles(fs)});
+
+/* ---------- ส่งออกข้อมูลสำหรับวิจัย: หุ้นสามัญทั้งกระดาน (ไม่มี survivorship bias) + ดัชนี แบ่งไฟล์ ≤ 25 MB ---------- */
+const RX_INDEX=new Set(['SET','SET50','SET100','MAI']);
+function rxKeep(t){
+  if(RX_INDEX.has(t))return true;
+  if(!/^[A-Z0-9][A-Z0-9]{0,7}$/.test(t))return false;           // ตัด -W -F -R -O $ ! และชื่อยาว (DW)
+  if(INDEXNAMES.has(t)||/^(SET|MAI|SSET)/.test(t))return false;
+  if(/\d\d[CP]\d\d/.test(t))return false;                        // DW
+  if(/^[A-Z]{2,}\d{2}$/.test(t)&&!KEEP_2DIGIT.has(t))return false; // DR
+  if(/\d{3}$/.test(t))return false;                              // ETF อ้างอิงดัชนี
+  return true;                                                   // เก็บกองทุน/REIT ไว้ ให้ฝั่งวิจัยกรองเอง
+}
+let rxUrls=[];
+async function exportResearch(list){
+  const msg=document.getElementById('rxMsg'),out=document.getElementById('rxOut');
+  const files=[...(list||[])];if(!files.length)return;
+  if(typeof JSZip==='undefined'){msg.textContent='ต้องต่อเน็ตครั้งแรกเพื่อโหลดตัวอ่าน zip';return}
+  const fromY=Math.max(1975,+document.getElementById('rxFrom').value||2005);
+  const minK=fromY*10000;
+  rxUrls.forEach(u=>URL.revokeObjectURL(u));rxUrls=[];out.innerHTML='';
+  const t0=Date.now();
+  const byYear=new Map();                 // ปี -> array ของบรรทัด (ไม่ซ้ำวัน+หุ้น)
+  const seen=new Set();let rows=0,dates=new Set();
+  const addText=text=>{
+    let i=0;const n=text.length;
+    while(i<n){
+      let j=text.indexOf('\n',i);if(j<0)j=n;
+      let line=text.slice(i,j);i=j+1;
+      if(line.charCodeAt(line.length-1)===13)line=line.slice(0,-1);
+      if(!line||line.charCodeAt(0)===60)continue;
+      const c1=line.indexOf(',');if(c1<1)continue;
+      const c2=line.indexOf(',',c1+1);if(c2<0)continue;
+      const k=+line.slice(c1+1,c2);
+      if(!(k>=minK&&k<21000000))continue;
+      const t=line.slice(0,c1).trim().toUpperCase();
+      if(!rxKeep(t))continue;
+      const key=t+k;if(seen.has(key))continue;seen.add(key);
+      const y=Math.floor(k/10000);
+      let a=byYear.get(y);if(!a){a=[];byYear.set(y,a)}
+      a.push(line);rows++;dates.add(k);
+    }
+  };
+  try{
+    for(const f of files){
+      if(/\.zip$/i.test(f.name)){
+        msg.textContent='กำลังเปิด '+f.name+' ('+fmtMB(f.size)+')';await new Promise(r=>setTimeout(r,0));
+        const z=await JSZip.loadAsync(f);
+        const ents=Object.keys(z.files).filter(e=>!z.files[e].dir&&/\.csv$/i.test(e)).sort();
+        let done=0;
+        for(const e of ents){
+          const dk=dateFromName(e);done++;
+          if(dk!=null&&dk<minK)continue;
+          const zf=z.files[e],size=(zf._data&&zf._data.uncompressedSize)||0;
+          if(size>BIGFILE)await zipChunks(zf,size,async b=>{addText(b)});
+          else addText(await zf.async('string'));
+          if(done%100===0){msg.textContent='อ่าน '+f.name+' '+done.toLocaleString()+' / '+ents.length.toLocaleString()+' ไฟล์ · '+rows.toLocaleString()+' แถว';await new Promise(r=>setTimeout(r,0))}
+        }
+      }else if(/\.csv$/i.test(f.name)){
+        if(f.size>BIGFILE)await eachChunk(f,async b=>{addText(b)});else addText(await f.text());
+      }
+    }
+    if(!rows){msg.textContent='ไม่พบข้อมูลตั้งแต่ปี '+fromY+' ในไฟล์ที่เลือก';return}
+    /* จัดกลุ่มปีเป็นไฟล์: อัดทีละปีแล้ววัดขนาดจริง ไม่เกิน 25 MB ต่อไฟล์ */
+    const LIMIT=25*1048576,years=[...byYear.keys()].sort((a,b)=>a-b);
+    const parts=[];let cur=null;
+    const head='<TICKER>,<DTYYYYMMDD>,<OPEN>,<HIGH>,<LOW>,<CLOSE>,<VOL>\n';
+    for(const y of years){
+      msg.textContent='กำลังบีบอัดปี '+y+' ...';await new Promise(r=>setTimeout(r,0));
+      const lines=byYear.get(y);byYear.delete(y);
+      const txt=head+lines.join('\n')+'\n';
+      const one=new JSZip();one.file('eod-'+y+'.csv',txt,{compression:'DEFLATE',compressionOptions:{level:9}});
+      const est=(await one.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:9}})).length;
+      if(!cur||cur.size+est>LIMIT){cur={years:[],files:[],size:0};parts.push(cur)}
+      cur.years.push(y);cur.files.push(['eod-'+y+'.csv',txt]);cur.size+=est;
+    }
+    let h='<div class="hint" style="margin-bottom:6px">ดาวน์โหลดครบทุกไฟล์แล้วอัปโหลดให้ผู้ช่วยทีละไฟล์ — ไฟล์ละไม่เกิน 25 MB</div><table><tr><th>ไฟล์</th><th>ปี</th><th class="num">ขนาด</th><th></th></tr>';
+    for(let i=0;i<parts.length;i++){
+      msg.textContent='กำลังสร้างไฟล์ '+(i+1)+' / '+parts.length;await new Promise(r=>setTimeout(r,0));
+      const z=new JSZip();
+      for(const [n,t] of parts[i].files)z.file(n,t);
+      z.file('README.txt','EOD research export from EOD Signal Desk v'+VERSION+'\nThai common stocks incl. delisted + SET/SET50/SET100/MAI\nyears '+parts[i].years[0]+'-'+parts[i].years[parts[i].years.length-1]+'\npart '+(i+1)+' of '+parts.length+'\n');
+      const blob=await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:9}});
+      parts[i].files=null;
+      const url=URL.createObjectURL(blob);rxUrls.push(url);
+      const nm='eod-research-'+fromY+'-part'+(i+1)+'of'+parts.length+'.zip';
+      h+='<tr><td class="sym">'+nm+'</td><td>'+parts[i].years[0]+(parts[i].years.length>1?'–'+parts[i].years[parts[i].years.length-1]:'')+'</td><td class="num">'+fmtMB(blob.size)+'</td><td><a class="b" style="text-decoration:none;display:inline-block;padding:5px 12px" href="'+url+'" download="'+nm+'">ดาวน์โหลด</a></td></tr>';
+    }
+    out.innerHTML=h+'</table>';
+    msg.textContent='เสร็จใน '+((Date.now()-t0)/1000).toFixed(0)+' วินาที — '+dates.size.toLocaleString()+' วันทำการ · '+rows.toLocaleString()+' แถว · '+parts.length+' ไฟล์';
+  }catch(e){msg.textContent='ส่งออกไม่สำเร็จ: '+errText(e);console.error(e)}
+}
 
 function clearAll(){
   if(!confirm('ล้างข้อมูลทั้งหมด ทั้งในหน้านี้และที่บันทึกไว้ในเบราว์เซอร์? (ควร Export สำรองก่อน)'))return;
