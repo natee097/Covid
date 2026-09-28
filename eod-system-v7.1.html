@@ -1653,7 +1653,14 @@ function zipChunks(zf,total,cb){
     const dec=new TextDecoder('utf-8');
     let parts=[],len=0,pos=0,failed=false;
     const st=zf.internalStream('uint8array');
-    const fail=e=>{if(!failed){failed=true;try{st.pause()}catch(_){}rej(e)}};
+    const fail=e=>{
+      if(failed)return;failed=true;try{st.pause()}catch(_){}
+      if(isSizeErr(e)&&pos>0){                        // ขนาดที่ระบุไม่ตรง แต่ข้อมูลส่งมาครบแล้ว — เก็บส่วนที่เหลือแล้วจบปกติ
+        zipRecovered++;const rest=parts.join('');
+        Promise.resolve(rest.trim()?cb(rest,total||pos):null).then(res,rej);return;
+      }
+      rej(e);
+    };
     st.on('data',u8=>{
       if(failed)return;
       pos+=u8.length;
@@ -1677,6 +1684,30 @@ function zipChunks(zf,total,cb){
   });
 }
 function readChunks(rd,cb){return rd.file?eachChunk(rd.file,cb):zipChunks(rd.zf,rd.size,cb)}
+/* ไฟล์ใน zip บางไฟล์ของ siamchart ระบุขนาดไม่ตรงกับข้อมูลจริง ตัวอ่าน zip จะปฏิเสธทั้งไฟล์ด้วยข้อความ
+   "uncompressed data size mismatch" — กรณีนี้คลายข้อมูลเองด้วยตัวถอดของเบราว์เซอร์ ซึ่งไม่เช็คขนาดที่ระบุไว้ */
+let zipRecovered=0,zipLost=[];
+function isSizeErr(e){return /size mismatch|crc32|invalid code|incorrect header|unexpected end/i.test((e&&e.message)||String(e))}
+async function inflateText(zf){
+  const d=zf._data;if(!d||!d.compressedContent)throw new Error('อ่านข้อมูลดิบในไฟล์ zip ไม่ได้');
+  const raw=d.compressedContent instanceof Uint8Array?d.compressedContent:new Uint8Array(d.compressedContent);
+  const stored=d.compression&&d.compression.magic==='\x00\x00';
+  let st=new Blob([raw]).stream();
+  if(!stored)st=st.pipeThrough(new DecompressionStream('deflate-raw'));
+  const rd=st.pipeThrough(new TextDecoderStream()).getReader();
+  const parts=[];
+  try{for(;;){const {value,done}=await rd.read();if(done)break;parts.push(value)}}
+  catch(e){if(!parts.length)throw e}                   // ข้อมูลขาดท้าย: เก็บส่วนที่อ่านได้ไว้ บรรทัดสุดท้ายที่ขาดจะถูกข้ามเอง
+  return parts.join('');
+}
+async function zipEntryText(zf,name){
+  try{return await zf.async('string')}
+  catch(e){
+    if(!isSizeErr(e))throw e;
+    try{const t=await inflateText(zf);zipRecovered++;return t}
+    catch(e2){zipLost.push(name||zf.name);return ''}
+  }
+}
 function cloneRoll(r){const o=Object.create(null);for(const t in r)o[t]=r[t].slice();return o}
 /* ประมวลผลไฟล์ใหญ่แบบสตรีมรอบเดียว — ถ้าพบว่าไฟล์ไม่ได้เรียงตามวันที่ จะเก็บราคาไว้ครบ
    แต่ยกเลิก breadth ของไฟล์นั้นทั้งหมด (ย้อนสถานะกลับ) เพื่อไม่ให้ค่าเพี้ยน */
@@ -1808,7 +1839,7 @@ async function buildReaders(files,msg,reps){
         if(dk!=null&&dk<minK){r.old++;skipped++;continue}
         const size=(zf._data&&zf._data.uncompressedSize)||0;
         r.used++;
-        readers.push({name:entry,dk:dk,src:r,zf:zf,size:size,big:size>BIGFILE,read:()=>zf.async('string')});
+        readers.push({name:entry,dk:dk,src:r,zf:zf,size:size,big:size>BIGFILE,read:()=>zipEntryText(zf,entry)});
       }
     }else if(nm.endsWith('.csv')){
       const r=newRep(f.name,'csv',f.size);reps.push(r);r.entries=1;
@@ -1829,7 +1860,7 @@ async function ingestArchive(files,msg){
   const t0=Date.now();
   const minK=(S.cfg.fromY||2019)*10000;
   const {readers,reps}=await buildReaders([...files],msg);
-  let skipped=0;
+  let skipped=0;zipRecovered=0;zipLost=[];
   if(!readers.length){
     msg.textContent='ไม่พบไฟล์ .csv ที่อ่านได้และอยู่ในช่วงปีที่ตั้งไว้ (ตั้งแต่ '+(S.cfg.fromY||2019)+') — ดูรายงานรายไฟล์ด้านล่าง';
     return{ok:false,dates:0,reps:reps};
@@ -1890,7 +1921,7 @@ async function ingestArchive(files,msg){
       msg.textContent='ขั้นที่ 2/2 — อ่านข้อมูล '+(i+1)+' / '+readers.length+' ไฟล์'+(ctx.rows?' ('+ctx.rows.toLocaleString()+' แถว)':'');
       await new Promise(r=>setTimeout(r,0));
     }
-    ctx.rep=readers[i].src;ctx.fileCnt=new Map();
+    ctx.rep=readers[i].src;ctx.fileCnt=new Map();const lost0=zipLost.length;
     try{
       if(readers[i].big){
         const nm=readers[i].name,tot=readers[i].size;
@@ -1901,6 +1932,7 @@ async function ingestArchive(files,msg){
       }else processText(await readers[i].read(),ctx);
     }catch(e){skipped++;readers[i].src.errs.push(readers[i].name+': '+errText(e))}
     for(const [k,n] of ctx.fileCnt)ctx.dayCnt.set(k,Math.max(ctx.dayCnt.get(k)||0,n));
+    for(const nm of zipLost.slice(lost0))readers[i].src.errs.push(nm+': ข้อมูลในไฟล์เสีย อ่านไม่ได้แม้ใช้ตัวกู้');
   }
   ctx.rep=null;ctx.fileCnt=null;
   const seenDates=ctx.seen,rows=ctx.rows,lastK=ctx.lastK;
@@ -1958,7 +1990,8 @@ async function ingestArchive(files,msg){
   msg.textContent='เสร็จใน '+secs+' วินาที — อ่าน '+readers.length+' ไฟล์ / '+seenDates.size+' วันทำการ, เก็บ '+rows.toLocaleString()+' แถว, universe '+uniMeta.length+' ตัว'
     +(dropped?' (ตัดออกจากรอบก่อน '+dropped+' ตัว)':'')
     +', breadth '+S.breadth.length+' วัน, ขนาดสถานะ '+fmtMB(bytes)
-    +(skipped?' | อ่านไม่ได้ '+skipped+' ไฟล์ ดูรายงานด้านล่าง':'')+warn;
+    +(skipped?' | อ่านไม่ได้ '+skipped+' ไฟล์ ดูรายงานด้านล่าง':'')
+    +(zipRecovered?' | กู้ไฟล์ใน zip ที่ระบุขนาดผิดได้ '+zipRecovered+' ไฟล์':'')+warn;
   markDirty();renderAll();
   return{ok:true,dates:seenDates.size,reps:reps,secs:secs,errs:skipped};
 }
@@ -3372,7 +3405,7 @@ async function exportResearch(list){
   const fromY=Math.max(1975,+document.getElementById('rxFrom').value||2005);
   const minK=fromY*10000;
   rxUrls.forEach(u=>URL.revokeObjectURL(u));rxUrls=[];out.innerHTML='';
-  const t0=Date.now();
+  const t0=Date.now();zipRecovered=0;zipLost=[];
   const byYear=new Map();                 // ปี -> array ของบรรทัด (ไม่ซ้ำวัน+หุ้น)
   const seen=new Set();let rows=0,dates=new Set();
   const addText=text=>{
@@ -3405,8 +3438,10 @@ async function exportResearch(list){
           const dk=dateFromName(e);done++;
           if(dk!=null&&dk<minK)continue;
           const zf=z.files[e],size=(zf._data&&zf._data.uncompressedSize)||0;
-          if(size>BIGFILE)await zipChunks(zf,size,async b=>{addText(b)});
-          else addText(await zf.async('string'));
+          try{
+            if(size>BIGFILE)await zipChunks(zf,size,async b=>{addText(b)});
+            else addText(await zipEntryText(zf,e));
+          }catch(err){zipLost.push(e+' ('+errText(err)+')')}
           if(done%100===0){msg.textContent='อ่าน '+f.name+' '+done.toLocaleString()+' / '+ents.length.toLocaleString()+' ไฟล์ · '+rows.toLocaleString()+' แถว';await new Promise(r=>setTimeout(r,0))}
         }
       }else if(/\.csv$/i.test(f.name)){
@@ -3440,7 +3475,9 @@ async function exportResearch(list){
       h+='<tr><td class="sym">'+nm+'</td><td>'+parts[i].years[0]+(parts[i].years.length>1?'–'+parts[i].years[parts[i].years.length-1]:'')+'</td><td class="num">'+fmtMB(blob.size)+'</td><td><a class="b" style="text-decoration:none;display:inline-block;padding:5px 12px" href="'+url+'" download="'+nm+'">ดาวน์โหลด</a></td></tr>';
     }
     out.innerHTML=h+'</table>';
-    msg.textContent='เสร็จใน '+((Date.now()-t0)/1000).toFixed(0)+' วินาที — '+dates.size.toLocaleString()+' วันทำการ · '+rows.toLocaleString()+' แถว · '+parts.length+' ไฟล์';
+    msg.textContent='เสร็จใน '+((Date.now()-t0)/1000).toFixed(0)+' วินาที — '+dates.size.toLocaleString()+' วันทำการ · '+rows.toLocaleString()+' แถว · '+parts.length+' ไฟล์'
+      +(zipRecovered?' · กู้ไฟล์ที่ระบุขนาดผิดได้ '+zipRecovered+' ไฟล์':'')
+      +(zipLost.length?' · อ่านไม่ได้เลย '+zipLost.length+' ไฟล์: '+zipLost.slice(0,5).join(', ')+(zipLost.length>5?' …':''):'');
   }catch(e){msg.textContent='ส่งออกไม่สำเร็จ: '+errText(e);console.error(e)}
 }
 
