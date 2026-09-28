@@ -55,6 +55,8 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-size:12.8px}
 textarea{width:100%;min-height:130px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:10px;resize:vertical}
 input,select{background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 10px}
 input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+input,select{max-width:100%}
+.row>div>input,.row>div>select{width:100%}
 label{display:block;font-size:12.5px;color:var(--dim);margin-bottom:4px}
 .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
 .row>div{flex:1;min-width:150px}
@@ -82,19 +84,26 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
   nav button{padding:10px 11px;font-size:13.5px}
   h1{font-size:18px}
 }
+#saveBar{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:6px}
+#saveBar .ok{color:var(--up)} #saveBar .bad{color:var(--warn)}
+.orders{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13.5px;line-height:1.75}
+.orders .oh{font-size:12px;color:var(--faint);margin-top:8px}
+.orders .oh:first-child{margin-top:0}
+button.b.sm{padding:4px 10px;font-size:12px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-  <div class="brand">EOD Signal Desk &nbsp;·&nbsp; v5.0</div>
+  <div class="brand">EOD Signal Desk &nbsp;·&nbsp; v6.0</div>
   <h1>ระบบสัญญาณ EOD — หุ้นไทยทั้งกระดาน</h1>
-  <div class="sub">คัดหุ้นจากทั้งกระดานด้วยสภาพคล่อง ไม่จำกัดเฉพาะ SET50 &nbsp;·&nbsp; ซื้อเมื่อราคาทำจุดสูงสุดใหม่ในรอบ 20 วันและอยู่เหนือเฉลี่ย 50 วัน &nbsp;·&nbsp; ขายเมื่อหลุดเฉลี่ย 50 วัน หรือหลุดจุดตัดขาดทุนที่เลื่อนตามราคา &nbsp;·&nbsp; ซื้อใหม่ได้เฉพาะตอนดัชนีอยู่เหนือเฉลี่ย 200 วัน</div>
+  <div class="sub">คัดหุ้นสามัญไทยจากทั้งกระดานด้วยสภาพคล่อง ไม่จำกัดเฉพาะ SET50 &nbsp;·&nbsp; ซื้อเมื่อราคาทำจุดสูงสุดใหม่ในรอบ 20 วันและอยู่เหนือเฉลี่ย 50 วัน &nbsp;·&nbsp; ขายเมื่อหลุดเฉลี่ย 50 วัน หรือหลุดจุดตัดขาดทุนที่เลื่อนตามราคา &nbsp;·&nbsp; ซื้อใหม่ได้เฉพาะตอนดัชนีอยู่เหนือเฉลี่ย 200 วัน</div>
+  <div id="saveBar"></div>
 </header>
 
 <div id="dirtyBar" style="display:none;margin:12px 0;border:1px solid var(--warn);border-radius:10px;padding:11px 16px;background:rgba(232,179,75,.08);color:var(--warn);font-size:13.5px">
-  มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก — กด Export สถานะ ในแท็บ ข้อมูล &amp; ตั้งค่า ก่อนปิดหน้า ไม่งั้นข้อมูลไม้ที่ถือและบันทึกเทรดจะหายทั้งหมด
+  เบราว์เซอร์นี้บันทึกอัตโนมัติไม่ได้ — กด Export สถานะ ในแท็บ ข้อมูล &amp; ตั้งค่า ก่อนปิดหน้า ไม่งั้นข้อมูลไม้ที่ถือและบันทึกเทรดจะหายทั้งหมด
 </div>
 <div id="regime"><div class="lamp"></div><div><div class="rt" id="regTxt">ยังไม่มีข้อมูลดัชนี SET — วางข้อมูลในแท็บ ข้อมูล &amp; ตั้งค่า ก่อน</div><div class="rd" id="regDet"></div></div></div>
 
@@ -110,6 +119,10 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
 <!-- ===== TAB: SIGNALS ===== -->
 <section id="t-sig">
   <div class="card">
+    <h2>ใบสั่งงานพรุ่งนี้</h2>
+    <div id="orderSheet"></div>
+  </div>
+  <div class="card">
     <h2>สรุปเงินวันนี้</h2>
     <div id="pfMini"></div>
     <div class="hint" style="margin-top:8px">ดูรายละเอียดและขั้นตอนที่ต้องทำได้ที่แท็บ สถานะที่ถือ</div>
@@ -117,7 +130,7 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
   <div class="card">
     <h2>กระดานสัญญาณ</h2>
     <div id="sigTbl"></div>
-    <div class="hint" style="margin-top:10px">ขนาดไม้คำนวณจาก: เงินเสี่ยงต่อไม้ ÷ (2×ATR) ปัดลงเป็น board lot 100 หุ้น — สัญญาณ BUY จะขึ้นเฉพาะเมื่อไฟ regime เป็นสีเขียวและยังมีช่องว่างต่ำกว่าเพดานจำนวนไม้</div>
+    <div class="hint" style="margin-top:10px">ขนาดไม้คำนวณจาก: เงินเสี่ยงต่อไม้ (มูลค่าพอร์ตวันนี้ × % เสี่ยงต่อไม้) ÷ ระยะ stop (2×ATR) ปัดลงเป็น board lot 100 หุ้น — สูตรเดียวกับที่ใช้ทดสอบย้อนหลัง · สัญญาณ BUY จะขึ้นเฉพาะเมื่อไฟ regime เป็นสีเขียวและยังมีช่องว่าง โดยนับช่องและเงินสดที่จะได้คืนจากไม้ที่ขึ้น EXIT พรุ่งนี้ให้แล้ว เหมือนในการทดสอบ</div>
   </div>
 </section>
 
@@ -130,7 +143,7 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
   <div class="card">
     <h2>สถานะที่ถืออยู่</h2>
     <div id="posTbl"></div>
-    <div class="hint" style="margin-top:10px">trailing stop ขยับขึ้นอย่างเดียวตามสูตร ปิด − 2×ATR(20) — ระบบจะไม่ลด stop ลงไม่ว่ากรณีใด เมื่อขึ้นป้าย EXIT ให้ส่งคำสั่งขายวันถัดไปแล้วกดปุ่ม ปิดไม้ เพื่อบันทึกลง log</div>
+    <div class="hint" style="margin-top:10px">trailing stop ขยับขึ้นอย่างเดียวตามสูตร ปิด − 2×ATR(20) โดยคิดจากทุกแท่งตั้งแต่วันเข้า ไม่ใช่แค่วันล่าสุด ดังนั้นโหลดไฟล์ทีละหลายวันก็ได้ stop ตรงกับการทดสอบ — ระบบจะไม่ลด stop ลงไม่ว่ากรณีใด เมื่อขึ้นป้าย EXIT ให้ส่งคำสั่งขายวันถัดไปแล้วกดปุ่ม ปิดไม้ เพื่อบันทึกลง log</div>
   </div>
   <div class="card">
     <h2>บันทึกเงินปันผลที่ได้รับ</h2>
@@ -145,9 +158,20 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
     <div class="msg" id="dvMsg"></div>
     <div id="dvList" style="margin-top:10px"></div>
   </div>
-  <div class="card">
+  <div class="card" id="closeCard">
+    <h2>ปิดไม้</h2>
+    <div class="hint" style="margin-bottom:10px">ใส่ราคาและวันที่ขายที่ matched จริง — วันที่ขายใช้คำนวณระยะถือและเรียงลำดับสถิติแพ้ติดกัน</div>
+    <div class="row">
+      <div><label>หุ้นที่ถือ</label><select id="clSym"></select></div>
+      <div><label>วันที่ขาย</label><input id="clDate" type="date"></div>
+      <div><label>ราคาขายจริง</label><input id="clPrice" type="number" step="0.01"></div>
+      <div><button class="b" onclick="closePosForm()">บันทึกการปิดไม้</button></div>
+    </div>
+    <div class="msg" id="clMsg"></div>
+  </div>
+  <div class="card" id="openCard">
     <h2>เปิดไม้ด้วยตนเอง</h2>
-    <div class="hint" style="margin-bottom:10px">ใช้เมื่อซื้อจริงแล้วตามสัญญาณ — ใส่ราคาที่ matched จริงเพื่อให้ stop และ P&amp;L ตรงกับพอร์ตจริง</div>
+    <div class="hint" style="margin-bottom:10px">ใช้เมื่อซื้อจริงแล้วตามสัญญาณ — ใส่ราคาที่ matched จริงเพื่อให้ stop และ P&amp;L ตรงกับพอร์ตจริง · ทางลัด: กดปุ่ม บันทึกไม้ ที่แถวสัญญาณซื้อในกระดาน ระบบจะกรอกชื่อหุ้นและจำนวนให้ เหลือแค่ราคาจริง</div>
     <div class="row">
       <div><label>หุ้น</label><select id="opSym"></select></div>
       <div><label>วันที่เข้า</label><input id="opDate" type="date"></div>
@@ -308,11 +332,11 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
       2. ตรวจกล่องสถานะข้อมูล ต้องขึ้นว่าดัชนีมีอย่างน้อย 200 วัน และไม่มีคำเตือนสีเหลือง<br>
       3. ตั้งเงินถัง โดยใช้ <b>ครึ่งเดียว</b> ของเงินที่ตั้งใจไว้จริง เช่นตั้งใจ 350,000 ให้ใส่ 175,000<br>
       4. ตั้งจำนวนไม้สูงสุดเป็น 3 ไม้ก่อน ไม่ใช่ 5 เพื่อให้เงินต่อไม้พอและเห็นภาพชัด<br>
-      5. เลือกชุดกฎเป็น ระบบพื้นฐาน แล้วกด Export เก็บไฟล์ไว้<br><br>
+      5. เลือกชุดกฎเป็น ระบบพื้นฐาน (หรือชุดที่ผ่านขั้นที่ 4 ทั้งสองช่วง) — ระบบจำชุดกฎไว้ให้เอง แล้วกด Export เก็บไฟล์สำรองไว้หนึ่งชุด<br><br>
 
       <b>สัปดาห์ที่ 1-2 — ซ้อมมือ ยังไม่ต้องซื้อจริงก็ได้</b><br>
       ทำ routine รายวันให้ครบทุกวัน บันทึกไม้ตามที่ระบบบอกลงในระบบ แต่จะซื้อจริงหรือไม่ก็ได้<br>
-      เป้าหมายคือให้ชินกับขั้นตอนและรู้ว่าไฟล์ .json ต้อง Export ทุกวัน ไม่ใช่การทำกำไร<br><br>
+      เป้าหมายคือให้ชินกับขั้นตอน ไม่ใช่การทำกำไร<br><br>
 
       <b>ไม้ที่ 1-10 — เทรดจริงขนาดครึ่ง</b><br>
       ซื้อตามลำดับที่ระบบจัดให้เท่านั้น ห้ามข้ามไปเลือกตัวที่ชอบเอง<br>
@@ -331,11 +355,11 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
   <div class="card">
     <h2>Routine รายวัน (3-5 นาที หลังตลาดปิด)</h2>
     <div class="hint" style="font-size:13.5px;color:var(--text)">
-      1. เปิดไฟล์นี้ → แท็บ ข้อมูล &amp; ตั้งค่า → Import ไฟล์ .json ล่าสุดของคุณ<br>
-      2. โหลดไฟล์ EOD วันใหม่ → กดเลือกไฟล์ในส่วน archive → ชี้ไฟล์วันนั้น ระบบ merge ต่อให้เอง<br>
-      3. แท็บ สถานะที่ถือ — ดูป้าย EXIT ก่อนเสมอ ถ้ามี ให้ตั้งขายพรุ่งนี้ทั้งไม้<br>
-      4. แท็บ สัญญาณวันนี้ — ถ้ามีป้าย BUY และไฟ regime เขียว ให้ตั้งซื้อพรุ่งนี้ตามขนาดไม้ที่ระบบคำนวณ<br>
-      5. เมื่อคำสั่งจับคู่จริงแล้ว บันทึกไม้ / ปิดไม้ ด้วยราคาจริง แล้วกด Export ก่อนปิดหน้าเสมอ
+      1. เปิดไฟล์นี้ในเบราว์เซอร์เดิม — ข้อมูลครั้งก่อนโหลดขึ้นมาเอง (ดูบรรทัดสถานะใต้หัวข้อว่า บันทึกอัตโนมัติ เมื่อไร)<br>
+      2. โหลดไฟล์ EOD วันใหม่ → แท็บ ข้อมูล &amp; ตั้งค่า → เลือกไฟล์ในส่วน archive ระบบ merge ต่อให้เอง ถ้าขึ้นคำเตือนว่าไฟล์ไม่ครบ ให้โหลดไฟล์วันนั้นใหม่<br>
+      3. แท็บ สัญญาณวันนี้ → การ์ด ใบสั่งงานพรุ่งนี้ คือทุกอย่างที่ต้องทำ ขายก่อน ซื้อทีหลัง ตามลำดับที่เขียนไว้ กด คัดลอก เก็บไว้ส่งคำสั่งเช้าพรุ่งนี้<br>
+      4. เมื่อคำสั่งจับคู่จริงแล้ว บันทึกไม้ / ปิดไม้ ด้วยราคาและวันที่จริง<br>
+      5. สัปดาห์ละครั้ง กด Export สำรองไฟล์ .json เก็บไว้นอกเบราว์เซอร์ (ระบบจะเตือนเมื่อเกิน 7 วัน)
     </div>
   </div>
   <div class="card">
@@ -346,13 +370,15 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
       <tr><td><span class="tag warnb">BREAKOUT / regime ปิด</span></td><td>หุ้นทะลุกรอบแล้ว แต่ตลาดใหญ่ต่ำกว่า SMA200 — ห้ามซื้อเด็ดขาด นี่คือกฎที่ปกป้องพอร์ตในตลาดขาลง</td></tr>
       <tr><td><span class="tag warnb">BREAKOUT / ไม้เต็ม</span></td><td>สัญญาณมาแต่ถือครบเพดานจำนวนไม้แล้ว — ไม่เพิ่ม รอไม้เดิมปิดก่อน</td></tr>
       <tr><td><span class="tag hold">ถืออยู่ / HOLD</span></td><td>มีไม้นี้อยู่แล้วและยังไม่มีสัญญาณออก — ถือต่อ ไม่ต้องทำอะไร</td></tr>
-      <tr><td><span class="tag exit">EXIT — ขายพรุ่งนี้</span></td><td>ปิดต่ำกว่า SMA50 หรือหลุด trailing stop — ตั้งขายพรุ่งนี้ทั้งไม้ ไม่มีข้อยกเว้น แล้วกด ปิดไม้ บันทึกราคาขายจริง</td></tr>
+      <tr><td><span class="tag exit">EXIT — ขายพรุ่งนี้</span></td><td>ปิดต่ำกว่า SMA50 หรือหลุด trailing stop — ตั้งขายพรุ่งนี้ทั้งไม้ ไม่มีข้อยกเว้น แล้วกด ปิดไม้ บันทึกราคาขายจริง ถ้าเขียนว่า เกิดตั้งแต่วันที่ แปลว่าเงื่อนไขออกเกิดในวันที่ยังไม่ได้เปิดดู ให้ขายทันทีเช่นกัน</td></tr>
+      <tr><td><span class="tag buy">ซื้อลำดับที่ n</span></td><td>ซื้อได้จริงหลังจัดสรรเงินสดและช่องว่างแล้ว ปุ่ม บันทึกไม้ ข้าง ๆ จะพาไปกรอกราคาที่ได้จริง</td></tr>
       <tr><td><span class="tag warnb">DATA &lt; 70 แท่ง</span></td><td>ข้อมูลหุ้นตัวนี้ไม่พอคำนวณ — โหลดไฟล์ย้อนหลังเพิ่ม</td></tr>
     </table>
   </div>
   <div class="card">
     <h2>ประวัติเวอร์ชัน</h2>
     <table>
+      <tr><td class="sym">v6.0</td><td>บันทึกอัตโนมัติในเบราว์เซอร์ (IndexedDB) ไม่ต้อง Import ทุกครั้งที่เปิด ยังมี Export ไว้สำรองและเตือนเมื่อไม่ได้สำรองเกิน 7 วัน · จำชุดกฎเสริมไว้ในสถานะ ก่อนหน้านี้ปิดหน้าแล้วกระดานสัญญาณกลับเป็นระบบพื้นฐานเองโดยไม่เตือน · ตัด DR หุ้นต่างประเทศ (เช่น MICRON01, SPACEX80 ที่เคยหลุดเข้า universe) กองทุนโครงสร้างพื้นฐาน REIT และ ETF ออกจาก universe และ breadth ปรับรายชื่อได้ในหน้าตั้งค่า · กระดานจริงตรงกับการทดสอบมากขึ้น: เงินเสี่ยงต่อไม้คิดจากมูลค่าพอร์ตวันนี้ เรียงลำดับซื้อด้วยสูตรเดียวกับการทดสอบ ไม้ที่ขึ้น EXIT คืนช่องและเงินสดให้การซื้อพรุ่งนี้ เช็ค correlation กับไม้ที่จะซื้อวันเดียวกันด้วย และสิ่งที่ต้องทำต่อไปผ่านกฎเสริมครบ · trailing stop คิดจากทุกแท่งตั้งแต่วันเข้า และจับ EXIT ที่เกิดในวันที่ยังไม่ได้เปิดดู · ใบสั่งงานพรุ่งนี้พร้อมปุ่มคัดลอก · ปุ่มบันทึกไม้จากกระดาน · ฟอร์มปิดไม้ใส่วันที่ขายจริง · ตรวจไฟล์ EOD ไม่ครบและแท่ง SET ผิดปกติ · ไฟล์ Export ระบุเวอร์ชันถูกต้อง (เดิมเขียน 2.0)</td></tr>
       <tr><td class="sym">v5.0</td><td>เพิ่มกราฟในผลทดสอบ 5 ชุด: เส้นทุนเทียบการถือ SET พร้อมเส้นทุนเริ่มต้น · กราฟใต้น้ำแสดงว่าต่ำกว่าจุดสูงสุดกี่เปอร์เซ็นต์ตลอดเวลา · ผลตอบแทนรายปี · การกระจายกำไรขาดทุนรายไม้ · อัตราชนะ 20 ไม้แบบเลื่อน  เพิ่มการวิเคราะห์ความเปราะ: ตัดไม้ที่ดีที่สุดออกแล้วเหลือเท่าไร และวันแย่สุด สัปดาห์แย่สุด เดือนแย่สุด  เพิ่มการสุ่มแบบหยิบคืนใน Monte Carlo พร้อมโอกาสที่พอร์ตจะขาดทุนถึงระดับต่าง ๆ  พอร์ตจริงมีกราฟเส้นทุนและอัตราชนะแบบเลื่อนเช่นกัน</td></tr>
       <tr><td class="sym">v4.1</td><td>แก้ป้ายที่ทำให้เข้าใจผิด จาก ติดลบจากจุดสูงสุดนานสุด เป็น ไม่ทำจุดสูงสุดใหม่นานสุด พร้อมเพิ่มตัวชี้วัดที่บอกความจริงว่าพอร์ตเคยขาดทุนจริงกี่วันและจุดต่ำสุดเทียบทุนที่ใส่ไปเท่าไร · เพิ่มการบันทึกเงินปันผลที่ได้รับจริง นับรวมในมูลค่าพอร์ตแต่แยกออกจากสถิติการเทรด · ระบุในผลทดสอบว่าไม่ได้นับปันผล และประเมินว่าผลจริงน่าจะดีกว่าราวปีละ 0.8-1.0%</td></tr>
       <tr><td class="sym">v4.0</td><td>ขั้นที่ 5 ทดสอบความทนทาน: สุ่มลำดับเทรด 2,000 รอบเพื่อดูว่าความเจ็บระหว่างทางแย่ได้แค่ไหน และทดสอบความไวของค่าที่ตั้งไว้ว่าถ้าเปลี่ยนเล็กน้อยผลจะพลิกไหม พร้อมบอกว่าค่าที่ใช้อยู่เป็นค่าที่ดีที่สุดพอดีหรือไม่ ซึ่งเป็นสัญญาณของการเลือกค่าให้เข้ากับอดีต · ระยะจุดตัดขาดทุนปรับได้แล้ว · เพิ่มขั้นตอนเริ่มใช้จริงแบบละเอียดในแท็บวิธีใช้</td></tr>
@@ -372,7 +398,7 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
       <tr><td class="sym">v1.1</td><td>อ่านไฟล์ EOD archive ทั้ง batch และ .zip ได้จากในเบราว์เซอร์ ไม่ต้องลงโปรแกรม</td></tr>
       <tr><td class="sym">v1.0</td><td>กระดานสัญญาณ สถานะที่ถือ trailing stop 2×ATR บันทึกเทรด และ regime filter SMA200</td></tr>
     </table>
-    <div class="hint" style="margin-top:8px">ยังไม่ได้ทำ (รอเฟสถัดไป): RS เทียบดัชนีเป็นตัวจัดอันดับ · บันไดเพดานจำนวนไม้ตามบริบทตลาด · เพดานต่อกลุ่มอุตสาหกรรม · เพดานขนาดไม้ตามสภาพคล่อง · กติกาเปิดกระโดด · slippage · แยกช่วงปรับกติกากับช่วงยืนยัน · dashboard breadth เต็มรูปแบบ · open risk · ธงเตือน XD และแตกพาร์</div>
+    <div class="hint" style="margin-top:8px">ยังไม่ได้ทำ: เพดานต่อกลุ่มอุตสาหกรรม (ไฟล์ EOD ไม่มีข้อมูลกลุ่มของหุ้นแต่ละตัว ตอนนี้ใช้กฎ correlation แทน)</div>
   </div>
   <div class="card">
     <h2>ที่มาของตัวเลขในระบบ</h2>
@@ -396,7 +422,8 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
   <div class="card">
     <h2>เปลี่ยนเวอร์ชันโปรแกรม ต้องทำอย่างไร</h2>
     <div class="hint" style="font-size:13.5px;color:var(--text)">
-      ข้อมูลทั้งหมดของคุณอยู่ในไฟล์ .json ไม่ได้อยู่ในไฟล์โปรแกรม ดังนั้นการเปลี่ยนเวอร์ชันคือการเปลี่ยนแค่ไฟล์ HTML เท่านั้น<br><br>
+      ข้อมูลของคุณอยู่ในเบราว์เซอร์และในไฟล์ .json ที่ Export ไว้ ไม่ได้อยู่ในไฟล์โปรแกรม ดังนั้นการเปลี่ยนเวอร์ชันคือการเปลี่ยนแค่ไฟล์ HTML เท่านั้น<br><br>
+      จาก v5.0 หรือเก่ากว่า มาเป็น v6.0: เวอร์ชันเก่าไม่มีบันทึกอัตโนมัติ จึงต้อง Import ไฟล์ .json หนึ่งครั้ง หลังจากนั้นระบบจำเอง และให้โหลดไฟล์ EOD ย้อนหลังทั้งชุดใหม่หนึ่งครั้ง เพราะ v6.0 ตัด DR และกองทุนออก ทำให้ universe และ breadth เปลี่ยน แล้วรันขั้นที่ 4 ในแท็บทดสอบใหม่ เพราะผลเดิมรวม DR ไว้<br><br>
       1. เปิดโปรแกรมเวอร์ชันเก่า กด Export สถานะทั้งหมด ให้เรียบร้อยก่อน<br>
       2. เก็บไฟล์ .json ที่ได้ไว้ และอย่าลบไฟล์เก่าทิ้งจนกว่าจะมั่นใจ<br>
       3. เปิดโปรแกรมเวอร์ชันใหม่ กด Import แล้วเลือกไฟล์ .json นั้น<br>
@@ -411,7 +438,7 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
     <div class="hint" style="font-size:13.5px;color:var(--text)">
       1. ไฟ regime แดง = ห้ามเปิดไม้ใหม่ ไม่ว่าหุ้นจะดูดีแค่ไหน<br>
       2. Stop ขยับขึ้นได้ทางเดียว — ห้ามลด ห้ามเลื่อนหนีราคา ห้าม "ขอถือดูอีกวัน" หลังป้าย EXIT ขึ้น<br>
-      3. Export ทุกครั้งก่อนปิดหน้า — หน้านี้ไม่บันทึกอะไรเองเลย ไฟล์ .json คือสมุดบัญชีของระบบ
+      3. Export สำรองสัปดาห์ละครั้ง — ระบบบันทึกในเบราว์เซอร์ให้เองแล้ว แต่ถ้าล้างข้อมูลเบราว์เซอร์ เปลี่ยนเครื่อง หรือเปลี่ยนเบราว์เซอร์ ข้อมูลจะหาย ไฟล์ .json คือสมุดบัญชีสำรองของระบบ
     </div>
   </div>
 </section>
@@ -441,8 +468,12 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
     </div>
     <div class="row" style="margin-top:10px">
       <div><label>หุ้นปักหมุด (บังคับให้อยู่ใน universe เสมอ แม้สภาพคล่องไม่ผ่าน — เว้นว่างได้)</label><input id="cfgPin" style="width:100%" placeholder="เช่น PTT,AOT"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>ตัดออกเสมอ (กองทุน REIT ETF ที่ชื่อไม่บอกว่าเป็นกองทุน — คั่นด้วย ,)</label><input id="cfgExcl" style="width:100%"></div>
       <div style="flex:none"><button class="b" onclick="saveCfg()">บันทึก</button></div>
     </div>
+    <div class="hint" style="margin-top:8px">นอกจากรายชื่อนี้ ระบบตัดให้อัตโนมัติ: DR หุ้นต่างประเทศ (ชื่อลงท้ายด้วยเลข 2 หลัก เช่น MICRON01, XIAOMI80) · DW · ชื่อลงท้าย IF (กองทุนโครงสร้างพื้นฐาน เช่น DIF, TFFIF) · ชื่อลงท้าย REIT · ชื่อลงท้ายเลข 3 หลัก (ETF อ้างอิง SET100) · ดัชนี — เปลี่ยนรายชื่อแล้วต้องโหลดไฟล์ EOD ใหม่จึงมีผลกับ universe</div>
     <div class="hint" style="margin-top:8px">เกณฑ์สภาพคล่อง 50 ล้านบาทต่อวัน ให้หุ้นราว 110-140 ตัว ซึ่งกว้างกว่า SET50 มาก และเป็นค่าที่ทดสอบแล้วให้ผลดีที่สุดทั้งช่วงพัฒนาและช่วงยืนยัน — ตั้งสูงกว่านี้ (เช่น 200) จะเหลือแต่หุ้นใหญ่และผลแย่ลง ตั้งต่ำกว่านี้ (เช่น 20) จะได้หุ้นเล็กเข้ามาซึ่งผลดีในอดีตแต่ขาดทุนในช่วงยืนยัน และค่าธรรมเนียมจริงจะสูงกว่าที่ระบบสมมติไว้<br>ปี ค.ศ. 2019 = พ.ศ. 2562 ครอบคลุม COVID 2563, ช็อกดอกเบี้ย 2565 และตลาดหมี 2566-2568 — ข้อมูลก่อนปีที่ตั้งจะถูกข้ามตั้งแต่ตอนอ่านไฟล์ ทำให้โหลดไฟล์ชุดปี 1970 ได้โดยไม่ค้าง</div>
   </div>
 
@@ -477,12 +508,12 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
 
   <div class="card">
     <h2>เก็บ / กู้คืนสถานะ</h2>
-    <div class="hint">หน้านี้ไม่บันทึกอะไรอัตโนมัติ — ก่อนปิดหน้าให้กด Export ทุกครั้ง ไฟล์ JSON จะเก็บทั้งข้อมูลราคา สถานะที่ถือ และ log ครบ เปิดครั้งถัดไปใช้ Import ไฟล์เดิมแล้วทำงานต่อได้ทันที</div>
+    <div class="hint">ระบบบันทึกทุกการเปลี่ยนแปลงลงเบราว์เซอร์นี้ให้เอง (IndexedDB) เปิดหน้าครั้งหน้าข้อมูลจะกลับมาเอง แต่ข้อมูลผูกกับเบราว์เซอร์และเครื่องนี้ ถ้าล้างประวัติเบราว์เซอร์ เปลี่ยนเครื่อง หรือเปลี่ยนเบราว์เซอร์ ข้อมูลจะไม่ตามไป — Export ไฟล์ JSON สำรองไว้สัปดาห์ละครั้ง ไฟล์นี้เก็บทั้งข้อมูลราคา สถานะที่ถือ ชุดกฎ และ log ครบ ใช้ Import กลับได้ทุกเวอร์ชัน</div>
     <div class="row" style="margin-top:10px">
       <div style="flex:none"><button class="b" onclick="exportState(false)">Export สถานะทั้งหมด (.json)</button></div>
       <div style="flex:none"><button class="b ghost" onclick="exportState(true)">Export แบบย่อ (300 แท่ง)</button></div>
       <div style="flex:none"><button class="b ghost" onclick="document.getElementById('impFile').click()">Import ไฟล์สถานะ</button><input id="impFile" type="file" accept=".json" hidden onchange="importState(this)"></div>
-      <div style="flex:none"><button class="b red" onclick="if(confirm('ล้างข้อมูลทั้งหมดในหน้านี้?')){S=freshState();renderAll()}">ล้างทั้งหมด</button></div>
+      <div style="flex:none"><button class="b red" onclick="clearAll()">ล้างทั้งหมด</button></div>
     </div>
     <div class="msg" id="ioMsg"></div>
   </div>
@@ -492,10 +523,16 @@ summary{cursor:pointer;color:var(--accent);font-size:13px}
 <script>
 'use strict';
 /* ---------- state ---------- */
-const VERSION='2.0';
+const VERSION='6.0';
+const UNIV_VER=2;            // เปลี่ยนเมื่อเกณฑ์คัดหุ้นเปลี่ยน (v6.0 ตัด DR/กองทุน) — ใช้เตือนให้โหลด EOD ใหม่
+const DEFAULT_EXCL='VAYU1,TIF1,MNIT2,GLD,TDEX,LHHOTEL,WHART,WHAIR,IMPACT,PROSPECT,AIMIRT,AXTRART,FUTURERT,SIRIPRT,SSTRT';
+const DEFAULT_RULES={rs:false,ladder:false,corr:false,liq:false,gap:false,even:false,trend:false,
+  rsLag:60,ladHi:55,ladLo:40,ladConfirm:3,cap0:5,cap1:3,cap2:1,corrWin:60,corrMax:0.75,corrMaxN:2,
+  liqPct:5,gapMax:4,atrMult:2,slipBps:15};
 function freshState(){return{
-  v:2,
-  cfg:{cap:350000,risk:1,max:5,fee:0.32,depth:1250,minTO:50,maxUni:150,fromY:2019,pin:''},
+  v:3,
+  cfg:{cap:350000,risk:1,max:5,fee:0.32,depth:1250,minTO:50,maxUni:150,fromY:2019,pin:'',excl:DEFAULT_EXCL,
+       rules:Object.assign({},DEFAULT_RULES)},
   series:{},        // ticker -> [{k,o,h,l,c,v}]  (universe + SET)
   uni:[],           // universe ที่คัดไว้ล่าสุด [{t,to}]
   toAcc:{},         // มูลค่าซื้อขาย 20 วันล่าสุดรายตัว เก็บข้ามครั้ง เพื่อให้คัด universe จาก 20 วันเสมอ
@@ -505,26 +542,99 @@ function freshState(){return{
   breadth:[],       // [{k,p}] ประวัติ % หุ้นเหนือ SMA50 ตัวเอง
   equity:[],        // [{k,v}] มูลค่าพอร์ตจริงรายวัน บันทึกทุกครั้งที่โหลดข้อมูลใหม่
   div:[],           // [{k,sym,amt}] เงินปันผลที่ได้รับจริง (สุทธิหลังหักภาษี)
+  dayRows:{},       // วันที่ -> จำนวนแถวในไฟล์ EOD ของวันนั้น (ใช้จับไฟล์ที่โหลดมาไม่ครบ)
+  univVer:UNIV_VER,
+  meta:{},          // ver, at (เวลา Export), lastExport
   positions:[],log:[]
 }}
 function normalizeState(s){
   const f=freshState();
+  const oldRules=s.cfg&&s.cfg.rules;
   s.cfg=Object.assign({},f.cfg,s.cfg||{});
-  for(const key of ['series','board','uni','breadth','positions','log','toAcc','equity','div']) if(s[key]==null)s[key]=f[key];
+  s.cfg.rules=Object.assign({},DEFAULT_RULES,oldRules||{});
+  if(s.cfg.excl==null)s.cfg.excl=DEFAULT_EXCL;
+  for(const key of ['series','board','uni','breadth','positions','log','toAcc','equity','div','dayRows','meta'])if(s[key]==null)s[key]=f[key];
   if(s.boardLastK==null)s.boardLastK=0;
-  s.v=2;return s;
+  if(s.univVer==null)s.univVer=1;
+  s.v=3;return s;
 }
 let S=freshState();
 let sizeCache=null;
 let dirty=false;
-function markDirty(){dirty=true;showDirty()}
+
+/* ---------- บันทึกอัตโนมัติ (IndexedDB) ----------
+   ทุกการเปลี่ยนแปลงถูกเขียนลงเบราว์เซอร์ภายใน ~1 วินาที ไฟล์ .json ยังเป็นสำรองนอกเบราว์เซอร์ */
+const IDB_NAME='eod-signal-desk',IDB_STORE='state',IDB_KEY='main';
+const persist={ok:null,savedAt:null,timer:null,saving:false,err:''};
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB){rej(new Error('ไม่มี IndexedDB'));return}
+    let rq;try{rq=indexedDB.open(IDB_NAME,1)}catch(e){rej(e);return}
+    rq.onupgradeneeded=()=>{rq.result.createObjectStore(IDB_STORE)};
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error||new Error('เปิด IndexedDB ไม่ได้'));
+    rq.onblocked=()=>rej(new Error('IndexedDB ถูกล็อกโดยอีกแท็บ'));
+  });
+}
+async function idbGet(){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readonly'),rq=tx.objectStore(IDB_STORE).get(IDB_KEY);
+    rq.onsuccess=()=>{res(rq.result||null);db.close()};
+    rq.onerror=()=>{rej(rq.error);db.close()};
+  });
+}
+async function idbPut(val){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    if(val===null)tx.objectStore(IDB_STORE).delete(IDB_KEY);else tx.objectStore(IDB_STORE).put(val,IDB_KEY);
+    tx.oncomplete=()=>{res();db.close()};
+    tx.onerror=()=>{rej(tx.error);db.close()};
+    tx.onabort=()=>{rej(tx.error||new Error('บันทึกถูกยกเลิก (พื้นที่เต็ม?)'));db.close()};
+  });
+}
+function scheduleSave(){
+  if(persist.ok===false)return;
+  clearTimeout(persist.timer);
+  persist.timer=setTimeout(saveNow,700);
+}
+async function saveNow(){
+  clearTimeout(persist.timer);persist.timer=null;
+  if(persist.ok===false)return;
+  if(persist.ok===null){persist.timer=setTimeout(saveNow,500);return}   // ยังโหลดของเดิมไม่เสร็จ ห้ามเขียนทับ
+  persist.saving=true;
+  try{
+    await idbPut({ver:VERSION,at:Date.now(),state:S});
+    persist.ok=true;persist.savedAt=Date.now();persist.err='';dirty=false;
+  }catch(e){
+    persist.ok=false;persist.err=(e&&e.message)||String(e);
+  }
+  persist.saving=false;showDirty();
+}
+function markDirty(){dirty=true;scheduleSave();showDirty()}
+function daysSince(ms){return ms?Math.floor((Date.now()-ms)/86400000):null}
 function showDirty(){
-  const el=document.getElementById('dirtyBar');
-  if(!el)return;
-  el.style.display=dirty?'':'none';
+  const el=document.getElementById('dirtyBar'),sb=document.getElementById('saveBar');
+  if(el)el.style.display=(persist.ok===false&&dirty)?'':'none';
+  if(!sb)return;
+  const hasBook=(S.positions.length+S.log.length+(S.div||[]).length)>0;
+  const le=S.meta&&S.meta.lastExport,ld=daysSince(le);
+  let t='';
+  if(persist.ok===false)t='<span class="bad">บันทึกอัตโนมัติไม่ได้ ('+persist.err+') — ต้อง Export เองก่อนปิดหน้า</span>';
+  else if(persist.timer||persist.saving)t='กำลังบันทึก…';
+  else if(persist.savedAt)t='<span class="ok">บันทึกอัตโนมัติแล้ว</span> '+new Date(persist.savedAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  else if(persist.ok)t='<span class="ok">พร้อมบันทึกอัตโนมัติ</span>';
+  if(hasBook){
+    if(ld==null)t+=' · <span class="bad">ยังไม่เคย Export สำรอง</span>';
+    else if(ld>7)t+=' · <span class="bad">Export สำรองล่าสุด '+ld+' วันก่อน — ควร Export ใหม่</span>';
+    else t+=' · Export สำรองล่าสุด '+(ld===0?'วันนี้':ld+' วันก่อน');
+  }
+  sb.innerHTML=t;
 }
 window.addEventListener('beforeunload',function(e){
-  if(dirty){e.preventDefault();e.returnValue='ยังไม่ได้ Export ข้อมูล ถ้าปิดตอนนี้จะหายทั้งหมด'}
+  if(persist.timer){saveNow()}
+  if(dirty&&persist.ok===false){e.preventDefault();e.returnValue='ยังไม่ได้ Export ข้อมูล ถ้าปิดตอนนี้จะหายทั้งหมด'}
 });
 function stateBytes(){try{sizeCache=JSON.stringify(S).length}catch(e){sizeCache=null}return sizeCache}
 function fmtMB(b){return b==null?'—':(b/1048576).toFixed(1)+' MB'}
@@ -645,7 +755,7 @@ function renderRegime(){
   d.textContent='SET '+fN(r.close)+'  |  SMA200 '+fN(r.s200)+'  |  ข้อมูลถึง '+fmtD(r.date);
 }
 
-function riskBudget(){return S.cfg.cap*S.cfg.risk/100}
+function riskBudget(){return Math.max(0,portfolioState().equity)*S.cfg.risk/100}   // เท่ากับ engineDeep: มูลค่าพอร์ตวันนี้ × % เสี่ยง
 
 /* ---------- ใช้กฎเสริมชุดเดียวกับหน้าทดสอบ กับกระดานสัญญาณจริง ----------
    จุดประสงค์คือกันไม่ให้ทดสอบระบบหนึ่งแล้วไปเทรดอีกระบบหนึ่ง */
@@ -699,125 +809,237 @@ function liveCorr(a,bName,dates){
 
 let sigShowAll=false;
 function toggleSigAll(){sigShowAll=!sigShowAll;renderSignals()}
-function renderSignals(){
+
+/* ---------- สถานะของไม้ที่ถือ: stop และสัญญาณออก คิดทีละแท่งตั้งแต่วันเข้า ----------
+   เหมือนเครื่องยนต์ทดสอบที่เลื่อน stop และตรวจสัญญาณออกทุกวัน — โหลดไฟล์ทีละหลายวันก็ไม่พลาด
+   p.chkK = แท่งล่าสุดที่ตรวจแล้ว ทำให้แต่ละแท่งถูกตรวจด้วย stop ของวันนั้นจริง ไม่ใช่ stop ที่ขยับไปแล้ว
+   p.exitK = วันแรกที่เข้าเงื่อนไขออก (จำไว้จนกว่าจะปิดไม้) */
+function lowerBound(bars,k){let lo=0,hi=bars.length;while(lo<hi){const m=(lo+hi)>>1;if(bars[m].k<k)lo=m+1;else hi=m}return lo}
+function posStatus(p){
+  const AM=ruleCfg().atrMult;
+  const b=S.series[p.sym];
+  const o={p:p,sym:p.sym,qty:p.qty,entry:p.entry,last:p.entry,lastK:null,trail:p.trail,
+           exit:false,exitK:null,reason:'',anom:null,enough:false};
+  if(!b||!b.length)return o;
+  const a=analyze(p.sym);
+  o.enough=!!(a&&a.enough);
+  o.last=b[b.length-1].c;o.lastK=b[b.length-1].k;
+  /* ไม้จากไฟล์เวอร์ชันก่อน 6.0 ไม่มี chkK และ stop ถูกขยับถึงวันล่าสุดแล้ว — ตรวจเฉพาะแท่งล่าสุดแบบเดิม */
+  if(p.chkK==null)p.chkK=b.length>1?b[b.length-2].k:p.date-1;
+  if(o.enough){
+    for(let j=lowerBound(b,Math.max(p.date,p.chkK+1));j<b.length;j++){
+      const c=b[j].c,at=atr(b,20,j);
+      if(at!=null){const nt=c-AM*at;if(nt>p.trail)p.trail=nt}      // ขยับขึ้นอย่างเดียว
+      if(p.exitK==null){
+        const s50=sma(b,50,j);
+        if(s50!=null&&c<s50){p.exitK=b[j].k;p.exitWhy='ปิดต่ำกว่า SMA50'}
+        else if(c<p.trail){p.exitK=b[j].k;p.exitWhy='หลุด trailing stop'}
+      }
+      p.chkK=b[j].k;
+    }
+  }
+  o.trail=p.trail;o.exitK=p.exitK==null?null:p.exitK;o.reason=p.exitWhy||'';
+  o.exit=o.exitK!=null;
+  o.anom=priceAnomaly(p.sym);
+  return o;
+}
+
+/* ---------- แผนของวันพรุ่งนี้: ใช้ร่วมกันทั้งกระดานสัญญาณ ใบสั่งงาน และสิ่งที่ต้องทำต่อไป ----------
+   ลำดับเหมือนเครื่องยนต์ทดสอบ: ขายไม้ที่ขึ้น EXIT ก่อน (คืนช่องและเงินสด) แล้วจึงซื้อตามลำดับความแข็งแรง */
+function computePlan(){
+  const pst=S.positions.map(posStatus);                  // ก่อน portfolioState เพราะอัปเดต trail
+  const R=ruleCfg(),AM=R.atrMult,reg=regime(),lad=liveTierCap(),P=portfolioState();
+  const feeSide=(S.cfg.fee||0)/100/2;
+  const selling=pst.filter(x=>x.exit&&!x.anom);
+  const checking=pst.filter(x=>x.anom);
+  const proceeds=selling.reduce((s,x)=>s+x.last*x.qty*(1-feeSide),0);
+  const maxPosToday=lad.cap;
+  const equity=Math.max(0,P.equity);
+  const budget=equity*S.cfg.risk/100;
+  const pmap=new Map(pst.map(x=>[x.sym,x]));
+  const set=S.series['SET'];
+  const corrDates=(R.corr&&set)?set.slice(-(R.corrWin+1)).map(x=>x.k):null;
+  const rows=[],cands=[];
+  for(const n of Object.keys(S.series)){
+    if(n==='SET')continue;
+    const a=analyze(n);
+    const r={n:n,a:a,tag:'',stop:null,qty:null,val:null,rank:4,gap:999,rs:null,note:'',strength:null,order:0};
+    r.rs=R.rs?liveRS(n,R.rsLag):null;
+    if(!a.enough){r.tag='<span class="tag warnb">DATA &lt; 70 แท่ง</span>';r.rank=5;rows.push(r);continue}
+    r.gap=(a.h20-a.close)/a.h20*100;
+    r.stop=a.close-AM*a.a20;
+    let qty=Math.floor(budget/(AM*a.a20)/100)*100;
+    if(R.even&&maxPosToday>0){const q2=Math.floor((equity/maxPosToday)/a.close/100)*100;if(q2<qty)qty=q2}
+    if(R.liq&&a.to)qty=capByLiquidity(qty,a.close,a.to,R.liqPct);
+    if(qty>0&&qty*a.close>equity)qty=Math.floor(equity/a.close/100)*100;
+    r.qty=qty;r.val=qty*a.close;
+    const ps=pmap.get(n);
+    if(ps){
+      r.rank=1;
+      if(ps.anom)r.tag='<span class="tag warnb">ถืออยู่ — ตรวจสอบก่อน</span>';
+      else if(ps.exit){r.tag='<span class="tag exit">EXIT — ขายพรุ่งนี้</span>';r.note=ps.reason+(ps.exitK!==ps.lastK?' ตั้งแต่ '+fmtD(ps.exitK):'')}
+      else r.tag='<span class="tag hold">ถืออยู่</span>';
+    }else if(a.breakout){
+      let blocked='';
+      if(R.trend){
+        if(a.s200==null)blocked='ข้อมูลไม่ถึง 200 วัน ยังตัดสินแนวโน้มยาวไม่ได้';
+        else if(!(a.s50>a.s200))blocked='แนวโน้มยาวยังไม่เป็นขาขึ้น (SMA50 ต่ำกว่า SMA200)';
+      }
+      if(!blocked&&R.rs&&r.rs==null)blocked='ยังไม่มีประวัติพอคำนวณ RS';
+      r.rank=2;
+      if(reg.ok!==true)r.tag='<span class="tag warnb">BREAKOUT / regime ปิด</span>';
+      else if(blocked)r.tag='<span class="tag warnb">ข้าม — '+blocked+'</span>';
+      else if(qty<=0)r.tag='<span class="tag warnb">ข้าม — ขนาดไม้ต่ำกว่า 100 หุ้น</span>';
+      else{r.rank=0;r.strength=R.rs?r.rs:a.close/a.s50;cands.push(r)}
+    }else r.tag='<span class="tag wait">WAIT</span>';
+    rows.push(r);
+  }
+  /* เรียงผู้เข้าชิงด้วยสูตรเดียวกับ engineDeep: RS ถ้าเปิด ไม่งั้น ปิด ÷ SMA50 */
+  cands.sort((x,y)=>y.strength-x.strength||(x.n<y.n?-1:1));
+  let slotsLeft=Math.max(0,maxPosToday-S.positions.length+selling.length);
+  const slotsStart=slotsLeft;
+  let cashLeft=P.cash+proceeds;
+  const cashStart=cashLeft;
+  const heldForCorr=S.positions.map(p=>p.sym);           // เครื่องยนต์ทดสอบนับไม้ที่กำลังจะขายด้วย
+  const alloc=[];let order=0;
+  for(const r of cands){
+    const a=r.a;
+    if(slotsLeft<=0){
+      r.tag='<span class="tag warnb">เกินจำนวนช่อง</span>';
+      r.note='ถือครบ '+maxPosToday+' ไม้แล้ว รอไม้ใดไม้หนึ่งปิดก่อน';continue;
+    }
+    if(R.corr&&corrDates){
+      let same=0,with_=[];
+      for(const hn of heldForCorr.concat(alloc.map(x=>x.n))){
+        const c=liveCorr(r.n,hn,corrDates);
+        if(c!=null&&c>=R.corrMax){same++;with_.push(hn)}
+      }
+      if(same>=R.corrMaxN){r.tag='<span class="tag warnb">ข้าม — วิ่งไปด้วยกันกับ '+with_.join(', ')+'</span>';continue}
+    }
+    let cost=r.qty*a.close*(1+feeSide);
+    if(cost>cashLeft){
+      const canQty=Math.floor(cashLeft/(a.close*(1+feeSide))/100)*100;
+      if(canQty<100){
+        r.tag='<span class="tag warnb">เงินสดไม่พอ</span>';
+        r.note='ต้องใช้ '+fN(cost,0)+' แต่เหลือ '+fN(cashLeft,0);continue;
+      }
+      r.note='เงินสดเหลือ '+fN(cashLeft,0)+' ซื้อได้ '+canQty.toLocaleString()+' หุ้น จากขนาดเต็ม '+r.qty.toLocaleString()+' หุ้น — ความเสี่ยงไม้นี้จะต่ำกว่าที่ตั้งไว้ ซึ่งไม่เสียหาย';
+      r.qty=canQty;r.val=canQty*a.close;cost=canQty*a.close*(1+feeSide);r.reduced=true;
+    }
+    order++;slotsLeft--;cashLeft-=cost;r.order=order;r.cashAfter=cashLeft;
+    r.gapLimit=R.gap?a.close*(1+R.gapMax/100):null;
+    r.tag='<span class="tag buy">ซื้อลำดับที่ '+order+(r.reduced?' (ลดขนาด)':'')+'</span>';
+    if(!r.reduced)r.note=(r.gapLimit?'ถ้าเปิดสูงกว่า '+fN(r.gapLimit)+' ให้ข้ามไม้นี้ · ':'')+'ซื้อแล้วเงินสดเหลือ '+fN(cashLeft,0);
+    else if(r.gapLimit)r.note+=' · ถ้าเปิดสูงกว่า '+fN(r.gapLimit)+' ให้ข้าม';
+    alloc.push(r);
+  }
+  rows.sort((x,y)=>x.rank-y.rank||(x.rank===0?((x.order||99)-(y.order||99))||(y.strength-x.strength):0)||x.gap-y.gap);
+  return{R:R,reg:reg,lad:lad,P:P,pst:pst,selling:selling,checking:checking,proceeds:proceeds,
+         maxPosToday:maxPosToday,budget:budget,rows:rows,cands:cands,alloc:alloc,
+         slotsStart:slotsStart,slotsLeft:slotsLeft,cashStart:cashStart,cashLeft:cashLeft,feeSide:feeSide};
+}
+
+function renderSignals(plan){
   const host=document.getElementById('sigTbl');
   const names=Object.keys(S.series).filter(n=>n!=='SET');
   if(!names.length){host.innerHTML='<div class="empty">ยังไม่มีข้อมูลหุ้น — ไปที่แท็บ ข้อมูล &amp; ตั้งค่า แล้วโหลดไฟล์ EOD ระบบจะคัด universe ให้เอง</div>';return}
-  const R=ruleCfg();
-  const reg=regime();
-  const lad=liveTierCap();
-  const maxPosToday=lad.cap;
-  const pfEquity=portfolioState().equity;
-  const slots=maxPosToday-S.positions.length;
-  const held=S.positions.map(p=>p.sym);
-  const set=S.series['SET'];
-  const corrDates=(R.corr&&set)?set.slice(-(R.corrWin+1)).map(x=>x.k):null;
-  const rowsData=[];
-  for(const n of names){
-    const a=analyze(n);
-    const isHeld=S.positions.some(p=>p.sym===n);
-    let tag='<span class="tag wait">WAIT</span>',stop=null,qty=null,val=null,rank=4,note='';
-    if(!a.enough){tag='<span class="tag warnb">DATA &lt; 70 แท่ง</span>';rank=5}
-    else{
-      const AM=R.atrMult>0?R.atrMult:2;
-      stop=a.close-AM*a.a20;
-      qty=Math.floor(riskBudget()/(AM*a.a20)/100)*100;
-      if(R.even&&maxPosToday>0){
-        const q2=Math.floor((pfEquity/maxPosToday)/a.close/100)*100;
-        if(q2<qty)qty=q2;
-      }
-      if(R.liq&&a.to)qty=capByLiquidity(qty,a.close,a.to,R.liqPct);
-      val=qty*a.close;
-      if(qty>0&&val>S.cfg.cap){qty=Math.floor(S.cfg.cap/a.close/100)*100;val=qty*a.close}
-      if(isHeld){tag='<span class="tag hold">ถืออยู่</span>';rank=1}
-      else if(a.breakout){
-        let blocked='';
-        if(R.trend){
-          if(a.s200==null)blocked='ข้อมูลไม่ถึง 200 วัน ยังตัดสินแนวโน้มยาวไม่ได้';
-          else if(!(a.s50>a.s200))blocked='แนวโน้มยาวยังไม่เป็นขาขึ้น (SMA50 ต่ำกว่า SMA200)';
-        }
-        if(R.corr&&corrDates&&held.length){
-          let same=0;
-          for(const hn of held){const r=liveCorr(n,hn,corrDates);if(r!=null&&r>=R.corrMax)same++}
-          if(same>=R.corrMaxN)blocked='วิ่งไปด้วยกันกับไม้ที่ถืออยู่';
-        }
-        if(reg.ok!==true){tag='<span class="tag warnb">BREAKOUT / regime ปิด</span>';rank=2}
-        else if(blocked){tag='<span class="tag warnb">ข้าม — '+blocked+'</span>';rank=2}
-        else if(qty<=0){tag='<span class="tag warnb">ข้าม — สภาพคล่องไม่พอ</span>';rank=2}
-        else if(slots<=0){tag='<span class="tag warnb">BREAKOUT / ไม้เต็ม</span>';rank=2}
-        else{
-          tag='<span class="tag buy">BUY พรุ่งนี้</span>';rank=0;
-          if(R.gap)note='ถ้าเปิดสูงกว่า '+fN(a.close*(1+R.gapMax/100))+' ให้ข้ามไม้นี้';
-        }
-      }
-    }
-    const gap=(a.enough&&a.h20)?(a.h20-a.close)/a.h20*100:999;
-    const rs=R.rs?liveRS(n,R.rsLag):null;
-    rowsData.push({n:n,a:a,tag:tag,stop:stop,qty:qty,val:val,rank:rank,gap:gap,rs:rs,note:note});
-  }
-  rowsData.sort((x,y)=>x.rank-y.rank
-    ||(R.rs?((y.rs==null?-9:y.rs)-(x.rs==null?-9:x.rs)):0)
-    ||x.gap-y.gap);
-  /* จัดสรรเงินตามลำดับจริง — บอกว่าวันนี้ซื้อได้กี่ตัวและตัวไหนบ้าง */
-  const P=portfolioState();
-  let cashLeft=P.cash,slotsLeft=Math.max(0,maxPosToday-S.positions.length),order=0,buyable=0;
-  const buySignals=rowsData.filter(r=>r.rank===0);
-  for(const r of buySignals){
-    const cost=r.qty*r.a.close;
-    if(slotsLeft<=0){
-      r.tag='<span class="tag warnb">เกินจำนวนช่อง</span>';
-      r.note='ถือครบ '+maxPosToday+' ไม้แล้ว รอไม้ใดไม้หนึ่งปิดก่อน';
-    }else if(cost>cashLeft){
-      const canQty=Math.floor(cashLeft/r.a.close/100)*100;
-      if(canQty>=100){
-        order++;buyable++;slotsLeft--;
-        r.tag='<span class="tag buy">ซื้อลำดับที่ '+order+' (ลดขนาด)</span>';
-        r.note='เงินสดเหลือ '+fN(cashLeft,0)+' ซื้อได้ '+canQty.toLocaleString()+' หุ้น จากขนาดเต็ม '+r.qty.toLocaleString()+' หุ้น — ความเสี่ยงจะต่ำกว่า 1% ซึ่งไม่เสียหาย';
-        r.qty=canQty;r.val=canQty*r.a.close;cashLeft-=r.val;
-      }else{
-        r.tag='<span class="tag warnb">เงินสดไม่พอ</span>';
-        r.note='ต้องใช้ '+fN(cost,0)+' แต่เหลือ '+fN(cashLeft,0);
-      }
-    }else{
-      order++;buyable++;slotsLeft--;cashLeft-=cost;
-      r.tag='<span class="tag buy">ซื้อลำดับที่ '+order+'</span>';
-      r.note=(R.gap?'ถ้าเปิดสูงกว่า '+fN(r.a.close*(1+R.gapMax/100))+' ให้ข้ามไม้นี้ · ':'')+'ซื้อแล้วเงินสดเหลือ '+fN(cashLeft,0);
-    }
-  }
-  const act=rowsData.filter(r=>r.rank<=2);
-  const show=sigShowAll?rowsData:(act.length?act:rowsData.slice(0,15));
-  const onNames=[R.trend?'กรองแนวโน้มหุ้น':'',R.rs?'RS':'',R.ladder?'ลดไม้ตามตลาดกว้าง':'',R.corr?'เลี่ยงหุ้นวิ่งด้วยกัน':'',R.liq?'จำกัดตามสภาพคล่อง':'',R.gap?'ไม่ไล่ราคา':'',R.even?'แบ่งเงินเท่ากันทุกช่อง':''].filter(x=>x);
+  plan=plan||computePlan();
+  const {R,lad,rows,cands,alloc,maxPosToday}=plan;
+  const onNames=ruleNames(R);
   let h='<div class="hint" style="margin-bottom:8px">'
     +'<b>กฎที่ใช้อยู่ตอนนี้:</b> '+(onNames.length?onNames.join(' · '):'ระบบพื้นฐาน (ไม่เปิดกฎเสริม)')
-    +' &nbsp; <button class="b ghost" style="padding:3px 10px;font-size:12px" onclick="preset(\'base\');renderAll()">ระบบพื้นฐาน</button>'
-    +' <button class="b ghost" style="padding:3px 10px;font-size:12px" onclick="preset(\'rs\');renderAll()">พื้นฐาน + RS</button>'
-    +' <button class="b ghost" style="padding:3px 10px;font-size:12px" onclick="preset(\'trend\');renderAll()">+ กรองแนวโน้ม</button>'
-    +' <button class="b ghost" style="padding:3px 10px;font-size:12px" onclick="preset(\'all\');renderAll()">เปิดทุกกฎ</button>'
-    +'<br>กฎชุดนี้เป็นชุดเดียวกับที่ใช้ในแท็บทดสอบย้อนหลัง ปรับที่ไหนก็มีผลทั้งสองที่ ทำให้สิ่งที่คุณทดสอบกับสิ่งที่คุณเทรดเป็นระบบเดียวกันเสมอ'
+    +' &nbsp; <button class="b ghost sm" onclick="preset(\'base\');renderAll()">ระบบพื้นฐาน</button>'
+    +' <button class="b ghost sm" onclick="preset(\'rs\');renderAll()">พื้นฐาน + RS</button>'
+    +' <button class="b ghost sm" onclick="preset(\'trend\');renderAll()">+ กรองแนวโน้ม</button>'
+    +' <button class="b ghost sm" onclick="preset(\'all\');renderAll()">เปิดทุกกฎ</button>'
+    +'<br>ระบบจำชุดกฎนี้ไว้ และเป็นชุดเดียวกับที่ใช้ในแท็บทดสอบย้อนหลัง ปรับที่ไหนก็มีผลทั้งสองที่ · เงินเสี่ยงต่อไม้วันนี้ '+fN(plan.budget,0)+' บาท ('+S.cfg.risk+'% ของมูลค่าพอร์ต '+fN(plan.P.equity,0)+')'
     +(R.ladder?('<br>เพดานไม้วันนี้ '+maxPosToday+' ไม้'+(lad.tier?' (ตลาดกว้าง'+lad.tier+' — breadth '+fN(lad.breadth,0)+'%)':'')+(lad.noData?' — ยังไม่มีประวัติ breadth พอ ใช้เพดานเต็ม':'')):'')
     +'</div>';
-  if(buySignals.length){
+  if(cands.length){
     h+='<div class="hint" style="margin-bottom:8px;color:var(--text);font-size:13.5px">'
-      +'<b>วันนี้มีสัญญาณ '+buySignals.length+' ตัว แต่ซื้อได้จริง '+buyable+' ตัว</b> — เงินสด '+fN(P.cash,0)+' บาท ช่องว่าง '+Math.max(0,maxPosToday-S.positions.length)+' ช่อง<br>'
-      +'ซื้อตามลำดับที่ระบบจัดให้เท่านั้น '+(R.rs?'เรียงตาม RS คือตัวที่ชนะดัชนีมากที่สุดก่อน':'เรียงตามความแข็งแรงเทียบเส้นค่าเฉลี่ย')
-      +' ตัวที่เหลือไม่ต้องเสียดาย พรุ่งนี้ถ้ายังเข้าเงื่อนไขอยู่มันจะกลับมาอีก'
-      +(buyable<buySignals.length?'<br>ถ้าอยากให้เงินพอครบทุกช่อง ให้เปิดกฎ แบ่งเงินเท่ากันทุกช่อง ซึ่งจะตัดขนาดไม้ให้เล็กลงพอดีส่วนแบ่ง':'')
+      +'<b>วันนี้มีสัญญาณ '+cands.length+' ตัว แต่ซื้อได้จริง '+alloc.length+' ตัว</b> — เงินสดที่ใช้ได้ '+fN(plan.cashStart,0)+' บาท ช่องว่าง '+plan.slotsStart+' ช่อง'
+      +(plan.selling.length?' (นับเงินและช่องที่จะได้คืนจากไม้ที่ขายพรุ่งนี้ '+plan.selling.length+' ไม้แล้ว)':'')+'<br>'
+      +'ซื้อตามลำดับที่ระบบจัดให้เท่านั้น '+(R.rs?'เรียงตาม RS คือตัวที่ชนะดัชนีมากที่สุดก่อน':'เรียงตามราคาปิดเทียบเส้นค่าเฉลี่ย 50 วัน ตัวที่ยืนเหนือเส้นมากที่สุดก่อน')
+      +' เหมือนในการทดสอบ ตัวที่เหลือไม่ต้องเสียดาย พรุ่งนี้ถ้ายังเข้าเงื่อนไขอยู่มันจะกลับมาอีก'
+      +(alloc.length<cands.length&&!R.even?'<br>ถ้าอยากให้เงินพอครบทุกช่อง ให้เปิดกฎ แบ่งเงินเท่ากันทุกช่อง ซึ่งจะตัดขนาดไม้ให้เล็กลงพอดีส่วนแบ่ง':'')
       +'</div>';
   }
+  const act=rows.filter(r=>r.rank<=2);
+  const show=sigShowAll?rows:(act.length?act:rows.slice(0,15));
   h+='<div class="hint" style="margin-bottom:8px">'+
     (act.length?('ต้องดำเนินการ/เฝ้าดู '+act.length+' ตัว'):'ไม่มีสัญญาณวันนี้ — แสดง 15 ตัวที่ใกล้จุด breakout ที่สุด')+
-    ' จากทั้งหมด '+rowsData.length+' ตัวใน universe &nbsp; '+
-    '<button class="b ghost" style="padding:3px 10px;font-size:12px" onclick="toggleSigAll()">'+(sigShowAll?'แสดงเฉพาะที่ต้องทำ':'แสดงทั้งหมด')+'</button></div>';
+    ' จากทั้งหมด '+rows.length+' ตัวใน universe &nbsp; '+
+    '<button class="b ghost sm" onclick="toggleSigAll()">'+(sigShowAll?'แสดงเฉพาะที่ต้องทำ':'แสดงทั้งหมด')+'</button></div>';
   h+='<table><tr><th>หุ้น</th><th class="num">ปิด</th><th class="num">SMA50</th><th class="num">20D High</th><th class="num">ห่าง %</th>'
     +(R.rs?'<th class="num">RS</th>':'')
     +'<th class="num">ATR20</th><th class="num">Stop แนะนำ</th><th class="num">ขนาดไม้ (หุ้น)</th><th class="num">มูลค่า</th><th class="num">ซื้อขาย/วัน (ลบ.)</th><th>สัญญาณ</th></tr>';
   for(const r of show){
     const a=r.a;
+    const btn=r.order?' <button class="b ghost sm" onclick="prefillOpen(\''+r.n+'\','+r.qty+')">บันทึกไม้</button>':'';
     h+='<tr><td class="sym">'+r.n+'</td><td class="num">'+fN(a.close)+'</td><td class="num">'+fN(a.s50)+'</td><td class="num">'+fN(a.h20)+'</td><td class="num">'+(r.gap<999?fN(Math.max(0,r.gap),1):'—')+'</td>'
       +(R.rs?('<td class="num '+(r.rs!=null&&r.rs>1?'pos':'')+'">'+(r.rs!=null?fN(r.rs,3):'—')+'</td>'):'')
-      +'<td class="num">'+fN(a.a20)+'</td><td class="num">'+fN(r.stop)+'</td><td class="num">'+(r.qty?r.qty.toLocaleString():'—')+'</td><td class="num">'+(r.val?fN(r.val,0):'—')+'</td><td class="num">'+(a.to?fN(a.to/1e6,0):'—')+'</td><td>'+r.tag+(r.note?'<br><span class="datastat">'+r.note+'</span>':'')+'</td></tr>';
+      +'<td class="num">'+fN(a.a20)+'</td><td class="num">'+fN(r.stop)+'</td><td class="num">'+(r.qty?r.qty.toLocaleString():'—')+'</td><td class="num">'+(r.val?fN(r.val,0):'—')+'</td><td class="num">'+(a.to?fN(a.to/1e6,0):'—')+'</td><td>'+r.tag+btn+(r.note?'<br><span class="datastat">'+r.note+'</span>':'')+'</td></tr>';
   }
   h+='</table>';host.innerHTML=h;
+}
+
+/* ---------- ใบสั่งงานพรุ่งนี้ ---------- */
+function orderSheet(plan){
+  const set=S.series['SET'];
+  const lastK=set&&set.length?set[set.length-1].k:null;
+  const bad=dataWarnings().filter(w=>w.k===lastK);
+  const L=[],H=[];            // L = ข้อความสำหรับคัดลอก, H = html
+  const head='ใบสั่งงาน — ข้อมูลปิดวันที่ '+(lastK?fmtD(lastK):'—')+' ใช้กับวันทำการถัดไป';
+  L.push(head);
+  if(bad.length){const t='คำเตือน: ไฟล์ EOD วันล่าสุดดูไม่ครบ ('+bad[0].why+') — โหลดไฟล์วันนั้นใหม่ก่อนส่งคำสั่ง';L.push(t);H.push('<div class="msg" style="margin:0 0 6px">'+t+'</div>')}
+  const sells=plan.selling,chk=plan.checking;
+  H.push('<div class="oh">ขาย — ส่งก่อน ทั้งไม้ ช่วงเปิดตลาด</div>');L.push('','ขาย (ส่งก่อน ทั้งไม้ ช่วงเปิดตลาด)');
+  if(sells.length){sells.forEach((x,i)=>{
+    const t=(i+1)+'. '+x.sym+' '+x.qty.toLocaleString()+' หุ้น — '+x.reason+(x.exitK!==x.lastK?' ตั้งแต่ '+fmtD(x.exitK)+' (ขายทันที)':'')+' · ปิดล่าสุด '+fN(x.last);
+    L.push(t);H.push('<div>'+t+'</div>')})}
+  else{L.push('ไม่มี');H.push('<div class="hint">ไม่มี</div>')}
+  if(chk.length){
+    H.push('<div class="oh">ตรวจสอบก่อน — อย่าเพิ่งขาย</div>');L.push('','ตรวจสอบก่อน (อย่าเพิ่งขาย)');
+    chk.forEach(x=>{const t=x.sym+' ราคาเปลี่ยน '+fN(x.anom.chg,1)+'% โดยไม่มีวอลุ่มรองรับ — เช็คข่าว XD หรือแตกพาร์';L.push(t);H.push('<div>'+t+'</div>')});
+  }
+  H.push('<div class="oh">ซื้อ — หลังขาย ตามลำดับนี้เท่านั้น</div>');L.push('','ซื้อ (หลังขาย ตามลำดับนี้เท่านั้น)');
+  if(plan.reg.ok==null){const t='ยังซื้อไม่ได้ — ข้อมูลดัชนี SET ไม่ครบ 200 วัน';L.push(t);H.push('<div class="hint">'+t+'</div>')}
+  else if(plan.reg.ok!==true){const t='ไม่ซื้อ — ไฟ regime แดง ดัชนีต่ำกว่า SMA200';L.push(t);H.push('<div class="hint">'+t+'</div>')}
+  else if(!plan.alloc.length){const t=plan.cands.length?'มีสัญญาณแต่ซื้อไม่ได้ (ช่องเต็มหรือเงินสดไม่พอ) — ดูเหตุผลในกระดานสัญญาณ':'ไม่มีสัญญาณซื้อ';L.push(t);H.push('<div class="hint">'+t+'</div>')}
+  else plan.alloc.forEach(r=>{
+    const t=r.order+'. '+r.n+' '+r.qty.toLocaleString()+' หุ้น ≈ '+fN(r.val,0)+' บาท · stop เริ่มต้นประมาณ '+fN(r.stop)
+      +(r.gapLimit?' · ถ้าเปิดสูงกว่า '+fN(r.gapLimit)+' ให้ข้าม':'')+(r.reduced?' (ลดขนาดเพราะเงินสด)':'');
+    L.push(t);H.push('<div>'+t+' <button class="b ghost sm" onclick="prefillOpen(\''+r.n+'\','+r.qty+')">บันทึกไม้</button></div>');
+  });
+  const nAfter=S.positions.length-sells.length+plan.alloc.length;
+  const foot='หลังทำตามใบนี้: ถือ '+nAfter+' / '+plan.maxPosToday+' ไม้ · เงินสดเหลือประมาณ '+fN(plan.cashLeft,0)+' บาท';
+  L.push('',foot);
+  const empty=!sells.length&&!chk.length&&!plan.alloc.length;
+  return{text:L.join('\n'),html:'<div class="orders">'+H.join('')+'</div>'
+    +'<div class="row" style="margin-top:10px;align-items:center"><div style="flex:none"><button class="b" onclick="copyOrders()">คัดลอกใบสั่งงาน</button></div>'
+    +'<div class="hint" style="flex:1">'+(empty?'พรุ่งนี้ไม่ต้องส่งคำสั่งใด ๆ · ':'')+foot+' · ราคาและจำนวนประมาณจากราคาปิด ระบบทดสอบสมมติว่าได้ราคาเปิด</div></div>'
+    +'<div class="msg" id="copyMsg"></div>'};
+}
+let lastOrderText='';
+function renderOrderSheet(plan){
+  const el=document.getElementById('orderSheet');if(!el)return;
+  if(!S.series['SET']&&!S.positions.length){el.innerHTML='<div class="empty">ยังไม่มีข้อมูล — โหลดไฟล์ EOD ในแท็บ ข้อมูล &amp; ตั้งค่า ก่อน</div>';lastOrderText='';return}
+  const o=orderSheet(plan);lastOrderText=o.text;el.innerHTML=o.html;
+}
+function copyOrders(){
+  const msg=document.getElementById('copyMsg');
+  const done=()=>{if(msg)msg.textContent='คัดลอกแล้ว — วางใน LINE หรือโน้ตไว้ส่งคำสั่งพรุ่งนี้'};
+  const fallback=()=>{
+    const ta=document.createElement('textarea');ta.value=lastOrderText;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy')}catch(e){}
+    document.body.removeChild(ta);
+    if(ok)done();else if(msg)msg.textContent='คัดลอกอัตโนมัติไม่ได้ในเบราว์เซอร์นี้ — กดค้างที่ข้อความด้านบนแล้วเลือกคัดลอกแทน';
+  };
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(lastOrderText).then(done,fallback);
+    else fallback();
+  }catch(e){fallback()}
 }
 
 /* ---------- แผงสรุปสถานะเงินและสิ่งที่ต้องทำต่อ ---------- */
@@ -827,18 +1049,13 @@ function portfolioState(){
   const realized=(S.log||[]).reduce((s,t)=>s+(t.pl||0),0);
   const divTotal=(S.div||[]).reduce((s,d)=>s+(d.amt||0),0);
   let invested=0,mktValue=0,stopValue=0,openRisk=0;
-  const rows=[];
   for(const p of S.positions){
-    const a=analyze(p.sym);
-    const last=(a&&a.enough)?a.close:p.entry;
-    const trail=p.trail;
+    const b=S.series[p.sym];
+    const last=b&&b.length?b[b.length-1].c:p.entry;
     invested+=p.entry*p.qty;
     mktValue+=last*p.qty;
-    stopValue+=trail*p.qty;
-    openRisk+=Math.max(0,(last-trail))*p.qty;
-    rows.push({sym:p.sym,qty:p.qty,entry:p.entry,last:last,trail:trail,
-      value:last*p.qty,pl:(last-p.entry)*p.qty,
-      toStop:last>0?(last-trail)/last*100:0});
+    stopValue+=p.trail*p.qty;
+    openRisk+=Math.max(0,(last-p.trail))*p.qty;
   }
   const cash=cap+realized+divTotal-invested;
   const equity=cash+mktValue;
@@ -849,13 +1066,14 @@ function portfolioState(){
   const ifAllStopped=cash+stopValue*(1-feeSide);
   return{cap:cap,cash:cash,invested:invested,mktValue:mktValue,equity:equity,realized:realized,divTotal:divTotal,
     openRisk:openRisk,ifAllStopped:ifAllStopped,maxPos:maxPos,slotsLeft:slotsLeft,perSlot:perSlot,
-    rows:rows,ladTier:lad.tier,breadth:lad.breadth};
+    ladTier:lad.tier,breadth:lad.breadth};
 }
-function renderPortfolio(compact){
-  const P=portfolioState();
-  const reg=regime();
+function renderPortfolio(compact,plan){
+  plan=plan||computePlan();
+  const P=plan.P;
+  const reg=plan.reg;
   const pctEq=P.cap>0?(P.equity/P.cap-1)*100:0;
-  const dropIfStopped=P.cap>0?(P.ifAllStopped/P.equity-1)*100:0;
+  const dropIfStopped=P.equity>0?(P.ifAllStopped/P.equity-1)*100:0;
   let h='<div style="margin-bottom:6px">';
   h+='<span class="stat"><div class="k">มูลค่าพอร์ตรวม</div><div class="v '+(pctEq>=0?'pos':'neg')+'">'+fN(P.equity,0)+'</div></span>';
   h+='<span class="stat"><div class="k">เงินสดคงเหลือ</div><div class="v">'+fN(P.cash,0)+'</div></span>';
@@ -871,32 +1089,22 @@ function renderPortfolio(compact){
       +(warn?' — สูงกว่าปกติ ควรระวังการเปิดไม้เพิ่ม':'')+'</div>';
   }
   if(compact)return h;
-  /* ---- สิ่งที่ต้องทำต่อไป ---- */
-  const R=ruleCfg();
-  const exits=[],buys=[];
-  for(const p of S.positions){
-    const a=analyze(p.sym);
-    if(a&&a.enough&&(a.close<a.s50||a.close<p.trail))exits.push(p.sym);
-  }
-  if(reg.ok===true&&P.slotsLeft>0){
-    for(const n of Object.keys(S.series)){
-      if(n==='SET'||S.positions.some(p=>p.sym===n))continue;
-      const a=analyze(n);
-      if(a&&a.enough&&a.breakout)buys.push(n);
-    }
-  }
-  let steps=[];
-  if(exits.length)steps.push('<b>1. ขายก่อน</b> — '+exits.join(', ')+' เข้าเงื่อนไขออกแล้ว ตั้งขายทั้งไม้พรุ่งนี้ แล้วกดปุ่ม ปิดไม้ บันทึกราคาจริง');
+  /* ---- สิ่งที่ต้องทำต่อไป: มาจากแผนเดียวกับกระดานสัญญาณ จึงผ่านกฎเสริมครบ ---- */
+  const R=plan.R;
+  const exits=plan.selling.map(x=>x.sym),buys=plan.alloc.map(r=>r.n+' '+r.qty.toLocaleString()+' หุ้น');
+  const steps=[];let n=0;
+  if(exits.length)steps.push('<b>'+(++n)+'. ขายก่อน</b> — '+exits.join(', ')+' เข้าเงื่อนไขออกแล้ว ตั้งขายทั้งไม้พรุ่งนี้ แล้วกดปุ่ม ปิดไม้ บันทึกราคาจริง');
+  if(plan.checking.length)steps.push('<b>'+(++n)+'. ตรวจสอบก่อน</b> — '+plan.checking.map(x=>x.sym).join(', ')+' ราคาเปลี่ยนแรงโดยไม่มีวอลุ่ม อาจเป็น XD หรือแตกพาร์ เช็คข่าวก่อนตัดสินใจ');
   if(reg.ok===null)steps.push('<b>ยังเปิดไม้ใหม่ไม่ได้</b> — ข้อมูลดัชนียังไม่ครบ 200 วัน โหลดไฟล์ย้อนหลังเพิ่มในแท็บ ข้อมูล &amp; ตั้งค่า ก่อน');
   else if(reg.ok!==true)steps.push('<b>ห้ามเปิดไม้ใหม่</b> — ดัชนีต่ำกว่า SMA200 รอจนกลับขึ้นไปเหนือเส้นก่อน');
-  else if(!P.slotsLeft)steps.push('<b>ไม้เต็มแล้ว</b> — ถือ '+S.positions.length+' ไม้ครบเพดาน '+P.maxPos+' ไม้ ไม่เปิดเพิ่มจนกว่าจะมีไม้ปิด');
-  else if(buys.length)steps.push('<b>'+(exits.length?'2. ':'1. ')+'ซื้อได้</b> — '+buys.slice(0,5).join(', ')+' ดูจำนวนหุ้นในกระดานสัญญาณ ใช้เงินไม่เกิน '+fN(P.perSlot,0)+' บาทต่อไม้เพื่อให้เหลือช่องไว้ '+P.slotsLeft+' ไม้');
-  else steps.push('<b>วันนี้ไม่ต้องทำอะไร</b> — ยังไม่มีหุ้นเข้าเงื่อนไข เหลือช่องว่าง '+P.slotsLeft+' ไม้ กันเงินไว้ '+fN(P.cash,0)+' บาท รอสัญญาณ');
-  if(S.positions.length)steps.push('<b>ทุกวัน</b> — เช็คป้าย EXIT ก่อนเสมอ แล้วกด Export ก่อนปิดหน้า');
+  else if(!plan.slotsStart)steps.push('<b>ไม้เต็มแล้ว</b> — ถือ '+S.positions.length+' ไม้ครบเพดาน '+plan.maxPosToday+' ไม้ ไม่เปิดเพิ่มจนกว่าจะมีไม้ปิด');
+  else if(buys.length)steps.push('<b>'+(++n)+'. ซื้อ</b> — '+buys.join(', ')+' ตามลำดับนี้ (รายละเอียดในใบสั่งงาน แท็บ สัญญาณวันนี้)');
+  else steps.push('<b>วันนี้ไม่ต้องซื้อ</b> — '+(plan.cands.length?'มีสัญญาณแต่ไม่ผ่านการจัดสรร ดูเหตุผลในกระดานสัญญาณ':'ยังไม่มีหุ้นผ่านเงื่อนไขและกฎเสริมที่เปิดอยู่')+' เหลือช่องว่าง '+plan.slotsStart+' ไม้');
+  if(S.positions.length)steps.push('<b>ทุกวัน</b> — โหลดไฟล์ EOD ใหม่แล้วเช็คป้าย EXIT ก่อนเสมอ');
   h+='<div class="hint" style="margin-top:12px;font-size:13.5px;color:var(--text)"><b>สิ่งที่ต้องทำต่อไป</b><br>'+steps.join('<br>')+'</div>';
   if(P.slotsLeft>0&&P.perSlot>0){
     h+='<div class="hint" style="margin-top:10px">วิธีคิดเรื่องเงิน: เงินสด '+fN(P.cash,0)+' บาท หารตามช่องที่เหลือ '+P.slotsLeft+' ช่อง ได้ช่องละ '+fN(P.perSlot,0)+' บาท '
-      +'ถ้าไม้แรกใช้เงินเกินส่วนแบ่งนี้มาก ไม้ถัด ๆ ไปจะไม่มีเงินพอ และพอร์ตจะกลายเป็นหุ้นตัวเดียวขนาดใหญ่แทนที่จะกระจาย 5 ตัว '
+      +'ถ้าไม้แรกใช้เงินเกินส่วนแบ่งนี้มาก ไม้ถัด ๆ ไปจะไม่มีเงินพอ และพอร์ตจะกลายเป็นหุ้นตัวเดียวขนาดใหญ่แทนที่จะกระจาย '
       +'ระบบคำนวณจำนวนหุ้นจากความผันผวน ไม่ได้คำนวณจากเงินที่มี ดังนั้นหุ้นที่แกว่งน้อยจะได้ไม้ใหญ่มาก '
       +(R.even
         ? 'ตอนนี้เปิดกฎ แบ่งเงินเท่ากันทุกช่อง ไว้แล้ว ระบบจะตัดจำนวนหุ้นให้พอดีส่วนแบ่งเอง ไม่ต้องคำนวณเอง'
@@ -906,28 +1114,28 @@ function renderPortfolio(compact){
   return h;
 }
 
-/* ---------- แผงสรุปสถานะเงินและสิ่งที่ต้องทำต่อ (จบ) ---------- */
-function renderPositions(){
+/* ---------- ตารางไม้ที่ถือ ---------- */
+function keepSelect(el,opts,placeholder){
+  const prev=el.value;
+  el.innerHTML=(placeholder?'<option value="">'+placeholder+'</option>':'')+opts.map(n=>'<option>'+n+'</option>').join('');
+  if(opts.includes(prev))el.value=prev;
+}
+function renderPositions(plan){
   const host=document.getElementById('posTbl');
-  const sel=document.getElementById('opSym');
-  sel.innerHTML=Object.keys(S.series).filter(n=>n!=='SET').sort().map(n=>'<option>'+n+'</option>').join('');
-  if(!S.positions.length){host.innerHTML='<div class="empty">ยังไม่มีสถานะ — เมื่อซื้อจริงตามสัญญาณแล้ว บันทึกไม้ที่ฟอร์มด้านล่าง</div>';return}
-  let h='<table><tr><th>หุ้น</th><th class="num">เข้า</th><th class="num">จำนวน</th><th class="num">ปิดล่าสุด</th><th class="num">Trail Stop</th><th class="num">P&amp;L ยังไม่ปิด</th><th>สถานะ</th><th></th></tr>';
-  for(let pi=0;pi<S.positions.length;pi++){
-    const p=S.positions[pi];const a=analyze(p.sym);
-    let tag='<span class="tag hold">HOLD</span>',pl=null,plc='';
-    const anom=priceAnomaly(p.sym);
-    if(a&&a.enough){
-      const newTrail=a.close-(ruleCfg().atrMult>0?ruleCfg().atrMult:2)*a.a20;
-      if(newTrail>p.trail)p.trail=newTrail;                 // ratchet up only
-      pl=(a.close-p.entry)*p.qty;
-      plc=pl>=0?'pos':'neg';
-      if(a.close<a.s50||a.close<p.trail)tag='<span class="tag exit">EXIT — ขายพรุ่งนี้</span>';
-    }
-    if(anom)tag='<span class="tag warnb">ตรวจสอบก่อน — ราคาเปลี่ยน '+fN(anom.chg,1)+'% โดยไม่มีวอลุ่มรองรับ</span>'
+  keepSelect(document.getElementById('opSym'),Object.keys(S.series).filter(n=>n!=='SET').sort());
+  keepSelect(document.getElementById('clSym'),S.positions.map(p=>p.sym),S.positions.length?null:'— ไม่มีไม้ที่ถือ —');
+  if(!S.positions.length){host.innerHTML='<div class="empty">ยังไม่มีสถานะ — เมื่อซื้อจริงตามสัญญาณแล้ว บันทึกไม้ที่ฟอร์มด้านล่าง หรือกด บันทึกไม้ ในกระดานสัญญาณ</div>';return}
+  plan=plan||computePlan();
+  let h='<table><tr><th>หุ้น</th><th class="num">เข้า</th><th class="num">จำนวน</th><th class="num">ปิดล่าสุด</th><th class="num">Trail Stop</th><th class="num">ห่าง stop</th><th class="num">P&amp;L ยังไม่ปิด</th><th>สถานะ</th><th></th></tr>';
+  plan.pst.forEach((x,pi)=>{
+    let tag='<span class="tag hold">HOLD</span>';
+    const pl=x.lastK?(x.last-x.entry)*x.qty:null;
+    if(x.exit)tag='<span class="tag exit">EXIT — ขายพรุ่งนี้</span><br><span class="datastat">'+x.reason+(x.exitK!==x.lastK?' เกิดตั้งแต่ '+fmtD(x.exitK)+' ขายทันที':'')+'</span>';
+    if(x.anom)tag='<span class="tag warnb">ตรวจสอบก่อน — ราคาเปลี่ยน '+fN(x.anom.chg,1)+'% โดยไม่มีวอลุ่มรองรับ</span>'
       +'<br><span class="datastat">อาจขึ้น XD หรือแตกพาร์ ซึ่งราคาจะดูเหมือนร่วงทั้งที่ไม่ได้ร่วงจริง อย่าเพิ่งขายตามสัญญาณ ให้เช็คข่าวหุ้นตัวนี้ก่อน ถ้าเป็น XD จริงให้ปิดไม้แล้วบันทึกใหม่ด้วยราคาที่ปรับแล้ว</span>';
-    h+='<tr><td class="sym">'+p.sym+'</td><td class="num">'+fN(p.entry)+'<br><span class="datastat">'+fmtD(p.date)+'</span></td><td class="num">'+p.qty.toLocaleString()+'</td><td class="num">'+(a?fN(a.close):'—')+'</td><td class="num">'+fN(p.trail)+'</td><td class="num '+plc+'">'+(pl==null?'—':fN(pl,0))+'</td><td>'+tag+'</td><td><button class="b ghost" style="padding:5px 10px;font-size:12px" onclick="closePos('+pi+')">ปิดไม้</button></td></tr>';
-  }
+    const toStop=x.last>0?(x.last-x.trail)/x.last*100:null;
+    h+='<tr><td class="sym">'+x.sym+'</td><td class="num">'+fN(x.entry)+'<br><span class="datastat">'+fmtD(x.p.date)+'</span></td><td class="num">'+x.qty.toLocaleString()+'</td><td class="num">'+(x.lastK?fN(x.last):'—')+'</td><td class="num">'+fN(x.trail)+'</td><td class="num">'+(toStop!=null?fN(toStop,1)+'%':'—')+'</td><td class="num '+(pl==null?'':pl>=0?'pos':'neg')+'">'+(pl==null?'—':fN(pl,0))+'</td><td>'+tag+'</td><td><button class="b ghost sm" onclick="closePos('+pi+')">ปิดไม้</button></td></tr>';
+  });
   h+='</table>';host.innerHTML=h;
 }
 
@@ -1122,7 +1330,9 @@ function renderData(){
   document.getElementById('cfgMaxUni').value=S.cfg.maxUni;
   document.getElementById('cfgFromY').value=S.cfg.fromY;
   document.getElementById('cfgPin').value=S.cfg.pin||'';
-  document.getElementById('cfgHint').textContent='เงินเสี่ยงต่อไม้ปัจจุบัน = '+fN(riskBudget(),0)+' บาท';
+  document.getElementById('cfgExcl').value=S.cfg.excl||'';
+  const eqNow=portfolioState().equity;
+  document.getElementById('cfgHint').textContent='เงินเสี่ยงต่อไม้วันนี้ = มูลค่าพอร์ต '+fN(eqNow,0)+' × '+S.cfg.risk+'% = '+fN(riskBudget(),0)+' บาท — คิดจากมูลค่าพอร์ตวันนี้เหมือนการทดสอบย้อนหลัง พอร์ตโตไม้ก็ใหญ่ขึ้น พอร์ตลดไม้ก็เล็กลงเอง ส่วนเงินถังคือทุนตั้งต้นที่ใช้คำนวณเงินสด';
 
   /* ----- health box ----- */
   const hb=document.getElementById('healthBox');
@@ -1148,6 +1358,10 @@ function renderData(){
   if(set&&set.length<200)h+='<div class="msg">ข้อมูล SET ยังไม่ถึง 200 แท่ง — regime filter ยังทำงานไม่ได้ ต้องโหลดเพิ่ม</div>';
   if(stale.length)h+='<div class="msg">วันที่ไม่ตรงกับดัชนี '+stale.length+' ตัว (อาจเป็นหุ้นที่ไม่มีการซื้อขายวันนั้น หรือไฟล์ขาด): '+stale.slice(0,12).join(', ')+(stale.length>12?' …':'')+'</div>';
   if(short)h+='<div class="msg">ข้อมูลน้อยกว่า 70 แท่ง '+short+' ตัว — ตัวเหล่านี้จะยังไม่ให้สัญญาณ</div>';
+  const dw=dataWarnings();
+  if(dw.length)h+='<div class="msg">ไฟล์ EOD ที่ดูไม่ครบ '+dw.length+' วัน: '+dw.slice(-8).map(w=>fmtD(w.k)+' ('+w.why+')').join(', ')
+    +' — มักเกิดจากโหลดไฟล์ก่อนตลาดปิดหรือดาวน์โหลดไม่ครบ ให้โหลดไฟล์วันนั้นจาก siamchart ใหม่แล้วเลือกไฟล์นั้นอีกครั้ง ระบบจะเขียนทับให้เองและคำเตือนจะหายไป</div>';
+  if(S.univVer<UNIV_VER&&names.length)h+='<div class="msg">ข้อมูลนี้คัดหุ้นด้วยเกณฑ์ของเวอร์ชันก่อน 6.0 ซึ่งยังรวม DR หุ้นต่างประเทศและกองทุนไว้ — โหลดไฟล์ EOD ย้อนหลังทั้งชุด (ชุดปี 1970 + ชุดต้นปี) ใหม่หนึ่งครั้ง เพื่อคัด universe และคำนวณ breadth ใหม่</div>';
   if(brHist.length>5){
     const bnow=brHist[brHist.length-1].p;
     const bdesc=bnow>=60?'หุ้นส่วนใหญ่ยังแข็งแรง':(bnow>=40?'หุ้นแข็งกับอ่อนพอ ๆ กัน':'หุ้นส่วนใหญ่อ่อนแรงแล้ว');
@@ -1173,10 +1387,12 @@ function renderData(){
   host.innerHTML=t+'</table>';
 }
 
-function renderAll(){showDirty();renderRegime();renderSignals();renderPositions();renderLog();renderData();renderDivList();
+function renderAll(){
+  const plan=computePlan();
+  showDirty();renderRegime();renderOrderSheet(plan);renderSignals(plan);renderPositions(plan);renderLog();renderData();renderDivList();
   const a=document.getElementById('pfMini'),b=document.getElementById('pfBox');
-  if(a)a.innerHTML=renderPortfolio(true);
-  if(b)b.innerHTML=renderPortfolio(false);
+  if(a)a.innerHTML=renderPortfolio(true,plan);
+  if(b)b.innerHTML=renderPortfolio(false,plan);
 }
 
 /* ---------- actions ---------- */
@@ -1202,14 +1418,55 @@ const INDEXNAMES=new Set(['SET','SET50','SET100','SETHD','SETCLMV','SETWB','SETT
 const BREADTH_N=50;          // SMA ที่ใช้วัด breadth
 const SCAN_FILES=25;         // จำนวนไฟล์ล่าสุดที่ใช้ประเมินสภาพคล่อง
 
-/* คัดเฉพาะหุ้นสามัญ ตัด DW / warrant / foreign / ดัชนี ออกจากการนับ breadth และ universe */
+/* คัดเฉพาะหุ้นสามัญไทย ตัด DW / warrant / foreign / ดัชนี / DR / กองทุน / REIT / ETF ออกจากการนับ breadth และ universe
+   ผลถูกจำไว้ใน cache เพราะถูกเรียกทุกแถวของทุกไฟล์ — ล้าง cache เมื่อรายชื่อตัดออกเปลี่ยน */
+const KEEP_2DIGIT=new Set(['ATP30']);                   // หุ้นไทยที่ชื่อลงท้ายด้วยเลข 2 หลักจริง ๆ
+let commonCache=new Map(),exclSet=null;
+function resetCommon(){commonCache=new Map();exclSet=null}
 function isCommon(t){
-  if(!/^[A-Z][A-Z0-9]{0,7}$/.test(t))return false;  // ตัด $SECTOR, !INDUS, -O (odd lot), -W (warrant), -F/-R (ต่างชาติ), ชื่อยาวผิดปกติ
-  if(INDEXNAMES.has(t))return false;
-  if(/^(SET|MAI|SSET)/.test(t))return false;        // ดัชนีทุกตัว
-  if(/\d\d[CP]\d\d/.test(t))return false;           // DW
-  if(/^[A-Z]{2,5}\d{2}$/.test(t))return false;      // DW อ้างอิงหุ้นต่างประเทศ เช่น AAPL80
-  return true;
+  let r=commonCache.get(t);
+  if(r!==undefined)return r;
+  if(!exclSet)exclSet=new Set(String(S.cfg.excl||'').split(',').map(x=>x.trim().toUpperCase()).filter(x=>x));
+  r=true;
+  if(!/^[A-Z][A-Z0-9]{0,7}$/.test(t))r=false;       // ตัด $SECTOR, !INDUS, -O (odd lot), -W (warrant), -F/-R (ต่างชาติ), ชื่อยาวผิดปกติ
+  else if(INDEXNAMES.has(t)||/^(SET|MAI|SSET)/.test(t))r=false;   // ดัชนีทุกตัว
+  else if(/\d\d[CP]\d\d/.test(t))r=false;           // DW
+  else if(/^[A-Z]{2,}\d{2}$/.test(t)&&!KEEP_2DIGIT.has(t))r=false; // DR หุ้นต่างประเทศ เช่น AAPL80, MICRON01, XIAOMI80
+  else if(/\d{3}$/.test(t))r=false;                 // ETF อ้างอิงดัชนี เช่น BSET100
+  else if(/IF$/.test(t)&&t.length>=3)r=false;       // กองทุนโครงสร้างพื้นฐาน DIF, TFFIF, BTSGIF, 3BBIF
+  else if(/REIT$/.test(t))r=false;                  // REIT
+  else if(exclSet.has(t))r=false;                   // รายชื่อที่ผู้ใช้ตั้ง (กองทุน/REIT/ETF ที่ชื่อไม่บอก)
+  commonCache.set(t,r);
+  return r;
+}
+/* จับไฟล์ EOD ที่ไม่ครบ: จำนวนแถวน้อยกว่า 60% ของวันใกล้เคียง หรือวอลุ่มดัชนี SET ต่ำกว่า 30% ของวันใกล้เคียง
+   เทียบกับวันรอบข้าง ±10 วัน ไม่ใช่ค่าเฉลี่ยทั้งช่วง เพราะจำนวนหลักทรัพย์ในตลาดเพิ่มขึ้นทุกปี */
+function detectBadDays(ks,counts,setVols){
+  const out=[],W=10;
+  const med=a=>{const b=a.filter(x=>x>0).sort((x,y)=>x-y);return b.length?b[b.length>>1]:0};
+  for(let i=0;i<ks.length;i++){
+    const lo=Math.max(0,i-W),hi=Math.min(ks.length,i+W+1);
+    const why=[];
+    if(counts){
+      const nb=counts.slice(lo,i).concat(counts.slice(i+1,hi));
+      const m=med(nb);
+      if(nb.length>=5&&counts[i]>0&&m>0&&counts[i]<0.6*m)why.push(counts[i].toLocaleString()+' แถว ปกติราว '+m.toLocaleString());
+    }
+    if(setVols&&setVols[i]>0){
+      const nb=setVols.slice(lo,i).concat(setVols.slice(i+1,hi));
+      const m=med(nb);
+      if(nb.length>=5&&m>0&&setVols[i]<0.3*m)why.push('วอลุ่ม SET '+fN(setVols[i]/m*100,0)+'% ของปกติ');
+    }
+    if(why.length)out.push({k:ks[i],why:why.join(', ')});
+  }
+  return out;
+}
+function dataWarnings(){
+  const set=S.series['SET']||[];
+  const rowsK=Object.keys(S.dayRows||{}).map(Number);
+  const ks=[...new Set(rowsK.concat(set.map(b=>b.k)))].sort((a,b)=>a-b).slice(-300);
+  const vm=new Map(set.map(b=>[b.k,b.v||0]));
+  return detectBadDays(ks,ks.map(k=>(S.dayRows||{})[k]||0),ks.map(k=>vm.get(k)||0));
 }
 /* อ่านทีละบรรทัดโดยไม่แตกไฟล์ทั้งก้อนเป็น array — รองรับไฟล์รวมหลายปีขนาดใหญ่
    รูปแบบ: TICKER,YYYYMMDD,OPEN,HIGH,LOW,CLOSE,VOL */
@@ -1250,6 +1507,7 @@ function scanDates(text,minK,n){
 /* ประมวลผลข้อมูลของหนึ่งวัน: เก็บแท่งของ universe + เดินหน้า breadth */
 function flushDate(k,rows,ctx,storeToo){
   let above=0,tot=0;
+  if(storeToo&&ctx.dayCnt)ctx.dayCnt.set(k,Math.max(ctx.dayCnt.get(k)||0,rows.length));
   for(const r of rows){
     if(storeToo&&ctx.keep.has(r.t)){
       (ctx.store[r.t]||(ctx.store[r.t]=Object.create(null)))[k]={k:k,o:r.o,h:r.h,l:r.l,c:r.c,v:r.v};
@@ -1285,7 +1543,7 @@ function cloneRoll(r){const o=Object.create(null);for(const t in r)o[t]=r[t].sli
    แต่ยกเลิก breadth ของไฟล์นั้นทั้งหมด (ย้อนสถานะกลับ) เพื่อไม่ให้ค่าเพี้ยน */
 async function processFileChunked(file,ctx,prog){
   const local={keep:ctx.keep,store:ctx.store,roll:cloneRoll(ctx.roll),breadthMap:new Map(),
-               minK:ctx.minK,seen:ctx.seen,rows:0,lastK:ctx.lastK,capped:false};
+               minK:ctx.minK,seen:ctx.seen,rows:0,lastK:ctx.lastK,capped:false,dayCnt:ctx.dayCnt};
   let cur=-1,batch=[],broken=false;
   await eachChunk(file,async(body,pos)=>{
     eachRow(body,ctx.minK,(t,k,o,h,l,c,v)=>{
@@ -1314,11 +1572,14 @@ function processText(text,ctx){
     });
     if(cur>=0)flushDate(cur,batch,ctx,true);
   }else{                                 // ไฟล์ไม่เรียงตามวันที่ — เก็บแท่งทั้งช่วง แต่จำกัดหน้าต่าง breadth
+    const cnt=new Map();
     eachRow(text,ctx.minK,(t,k,o,h,l,c,v)=>{
+      cnt.set(k,(cnt.get(k)||0)+1);
       if(!ctx.keep.has(t))return;
       (ctx.store[t]||(ctx.store[t]=Object.create(null)))[k]={k:k,o:o,h:h,l:l,c:c,v:v};
       ctx.rows++;ctx.seen.add(k);if(k>ctx.lastK)ctx.lastK=k;
     });
+    if(ctx.dayCnt)for(const [k,n] of cnt)ctx.dayCnt.set(k,Math.max(ctx.dayCnt.get(k)||0,n));
     const groups=new Map();
     eachRow(text,info.cut,(t,k,o,h,l,c)=>{
       if(!isCommon(t))return;
@@ -1455,7 +1716,7 @@ async function ingestArchive(files){
   if(seeded)for(const t in S.board)roll[t]=S.board[t].slice();
   const breadthMap=new Map();for(const b of (S.breadth||[]))breadthMap.set(b.k,b.p);
   const ctx={keep:keep,store:store,roll:roll,breadthMap:breadthMap,minK:minK,
-             seen:new Set(),rows:0,lastK:0,capped:false};
+             seen:new Set(),rows:0,lastK:0,capped:false,dayCnt:new Map()};
   for(let i=0;i<readers.length;i++){
     if(i%3===0||readers.length<20){
       msg.textContent='ขั้นที่ 2/2 — อ่านข้อมูล '+(i+1)+' / '+readers.length+' ไฟล์'+(ctx.rows?' ('+ctx.rows.toLocaleString()+' แถว)':'');
@@ -1498,10 +1759,16 @@ async function ingestArchive(files){
   S.toAcc=keepAcc;
   if(seeded||seenDates.size>=BREADTH_N){
     const nb=Object.create(null);
-    for(const t in roll)if(roll[t].length)nb[t]=roll[t].slice(-BREADTH_N);
+    for(const t in roll)if(roll[t].length&&isCommon(t))nb[t]=roll[t].slice(-BREADTH_N);
     S.board=nb;S.boardLastK=Math.max(lastK,S.boardLastK||0);
   }
   S.breadth=[...breadthMap.entries()].map(([k,p])=>({k:k,p:p})).sort((a,b)=>a.k-b.k).slice(-depth);
+  /* จำนวนแถวต่อวัน — ใช้จับไฟล์ที่โหลดมาไม่ครบ โหลดไฟล์วันนั้นใหม่แล้วค่าจะถูกเขียนทับ */
+  const dr=Object.assign({},S.dayRows||{});
+  for(const [k,n] of ctx.dayCnt)dr[k]=n;
+  const drK=Object.keys(dr).map(Number).sort((a,b)=>a-b).slice(-400);
+  S.dayRows={};for(const k of drK)S.dayRows[k]=dr[k];
+  if(!seeded)S.univVer=UNIV_VER;                 // คัด universe และ breadth ใหม่ทั้งชุดด้วยเกณฑ์ปัจจุบันแล้ว
 
   /* บันทึกมูลค่าพอร์ตของวันล่าสุด เพื่อสร้างประวัติระยะยาว */
   if(lastK){
@@ -1516,6 +1783,8 @@ async function ingestArchive(files){
   if(bytes&&bytes>25*1048576)warn=' | คำเตือน: ไฟล์สถานะใหญ่เกิน 25 MB เบราว์เซอร์อาจเริ่มอืด ลดความลึกข้อมูลหรือจำนวนหุ้นใน universe';
   if(ctx.capped)warn+=' | หมายเหตุ: ไฟล์รวมไม่ได้เรียงตามวันที่ ราคาถูกเก็บครบทุกวัน แต่ breadth คำนวณเฉพาะ '+MAXGROUP+' วันท้ายของไฟล์นั้น';
   if(ctx.unsortedBig)warn+=' | หมายเหตุ: ไฟล์ขนาดใหญ่ไม่ได้เรียงตามวันที่ ราคาถูกเก็บครบ แต่ข้าม breadth ของไฟล์นั้นเพื่อกันค่าเพี้ยน';
+  const badNow=dataWarnings().filter(w=>ctx.dayCnt.has(w.k));
+  if(badNow.length)warn+=' | คำเตือน: ไฟล์ที่ดูไม่ครบ '+badNow.length+' วัน — '+badNow.slice(0,5).map(w=>fmtD(w.k)+' ('+w.why+')').join(', ')+' ให้โหลดไฟล์วันนั้นใหม่';
   msg.textContent='เสร็จใน '+secs+' วินาที — อ่าน '+readers.length+' ไฟล์ / '+seenDates.size+' วันทำการ, เก็บ '+rows.toLocaleString()+' แถว, universe '+uniMeta.length+' ตัว'
     +(dropped?' (ตัดออกจากรอบก่อน '+dropped+' ตัว)':'')
     +', breadth '+S.breadth.length+' วัน, ขนาดสถานะ '+fmtMB(bytes)
@@ -1534,7 +1803,22 @@ function saveCfg(){
   S.cfg.maxUni=Math.max(5,+document.getElementById('cfgMaxUni').value||150);
   S.cfg.fromY=Math.min(2100,Math.max(1970,+document.getElementById('cfgFromY').value||2019));
   S.cfg.pin=(document.getElementById('cfgPin').value||'').toUpperCase();
+  const ex=(document.getElementById('cfgExcl').value||'').toUpperCase().replace(/\s+/g,'');
+  if(ex!==S.cfg.excl){S.cfg.excl=ex;resetCommon()}
   markDirty();renderAll();
+}
+function todayInput(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function goTab(t){const b=document.querySelector('nav button[data-t="'+t+'"]');if(b)b.click()}
+/* ทางลัดจากกระดานสัญญาณ/ใบสั่งงาน: กรอกชื่อหุ้น จำนวน วันที่ ให้ เหลือราคาจริง */
+function prefillOpen(sym,qty){
+  goTab('pos');
+  document.getElementById('opSym').value=sym;
+  document.getElementById('opQty').value=qty;
+  document.getElementById('opDate').value=todayInput();
+  document.getElementById('opPrice').value='';
+  document.getElementById('opMsg').textContent='กรอกราคาที่ซื้อได้จริงของ '+sym+' แล้วกด บันทึกไม้ — ถ้าได้จำนวนไม่ครบให้แก้จำนวนหุ้นด้วย';
+  document.getElementById('openCard').scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('opPrice').focus({preventScroll:true});
 }
 function openPos(){
   const sym=document.getElementById('opSym').value;
@@ -1543,14 +1827,19 @@ function openPos(){
   const qty=+document.getElementById('opQty').value;
   const msg=document.getElementById('opMsg');
   if(!sym||!date||!(price>0)||!(qty>0)){msg.textContent='กรอกให้ครบทุกช่อง';return}
+  if(qty%100!==0&&!confirm('จำนวน '+qty+' หุ้น ไม่ใช่ board lot 100 หุ้น — บันทึกต่อไหม?'))return;
   if(S.positions.length>=S.cfg.max){msg.textContent='ไม้เต็มเพดาน '+S.cfg.max+' ตัวแล้ว';return}
   if(S.positions.some(p=>p.sym===sym)){msg.textContent='ถือ '+sym+' อยู่แล้ว';return}
-  const a=analyze(sym);
-  const AMx=ruleCfg().atrMult>0?ruleCfg().atrMult:2;
-  const trail=(a&&a.enough)?price-AMx*a.a20:price*0.95;
   const k=+date.replace(/-/g,'');
-  S.positions.push({sym:sym,date:k,entry:price,qty:qty,trail:trail});
-  msg.textContent='บันทึก '+sym+' แล้ว stop เริ่มต้น '+fN(trail);
+  const AM=ruleCfg().atrMult;
+  /* stop เริ่มต้น = ราคาเข้า − n×ATR ของวันที่เกิดสัญญาณ (แท่งก่อนวันเข้า) เหมือนเครื่องยนต์ทดสอบ */
+  const b=S.series[sym];
+  let at=null;
+  if(b&&b.length){const i=lowerBound(b,k)-1;at=atr(b,20,i>=0?i:b.length-1)}
+  const trail=at!=null?price-AM*at:price*0.95;
+  S.positions.push({sym:sym,date:k,entry:price,qty:qty,trail:trail,chkK:k-1});   // ตรวจทุกแท่งตั้งแต่วันเข้า
+  msg.textContent='บันทึก '+sym+' แล้ว stop เริ่มต้น '+fN(trail)+(at==null?' (ยังไม่มี ATR ใช้ −5% ชั่วคราว)':'');
+  document.getElementById('opPrice').value='';
   markDirty();renderAll();
 }
 function addDiv(){
@@ -1578,23 +1867,40 @@ function renderDivList(){
   }
   el.innerHTML=h+'</table><div class="hint" style="margin-top:6px">รวม '+D.length+' รายการ '+fN(D.reduce((s,d)=>s+d.amt,0),2)+' บาท</div>';
 }
-function closePos(i){
-  const p=S.positions[i];const a=analyze(p.sym);
-  const def=a?a.close:p.entry;
-  const px=prompt('ราคาขายจริงของ '+p.sym,def);
-  if(px==null)return;const exit=+px;if(!(exit>0))return;
+function closePos(i){                              // ปุ่มในตาราง: เติมฟอร์มปิดไม้ให้
+  const p=S.positions[i];if(!p)return;
+  const b=S.series[p.sym];
+  document.getElementById('clSym').value=p.sym;
+  document.getElementById('clDate').value=todayInput();
+  document.getElementById('clPrice').value=b&&b.length?b[b.length-1].c:p.entry;
+  document.getElementById('clMsg').textContent='ตรวจราคาและวันที่ให้ตรงกับที่ขายได้จริง แล้วกด บันทึกการปิดไม้';
+  document.getElementById('closeCard').scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('clPrice').focus({preventScroll:true});
+}
+function closePosForm(){
+  const sym=document.getElementById('clSym').value;
+  const date=document.getElementById('clDate').value;
+  const exit=+document.getElementById('clPrice').value;
+  const msg=document.getElementById('clMsg');
+  const i=S.positions.findIndex(p=>p.sym===sym);
+  if(i<0){msg.textContent='เลือกหุ้นที่ถืออยู่ก่อน';return}
+  if(!date||!(exit>0)){msg.textContent='กรอกวันที่และราคาขายให้ครบ';return}
+  const p=S.positions[i];
+  const k=+date.replace(/-/g,'');
+  if(k<p.date){msg.textContent='วันที่ขายอยู่ก่อนวันที่ซื้อ ('+fmtD(p.date)+') — ตรวจอีกครั้ง';return}
+  if(!confirm('ปิดไม้ '+sym+' '+p.qty.toLocaleString()+' หุ้น ที่ '+fN(exit)+' วันที่ '+fmtD(k)+' ?'))return;
   const gross=(exit-p.entry)*p.qty;
-  const fee=(p.entry+exit)*p.qty*(S.cfg.fee/100)/2*2; // fee% is round-trip on avg notional
-  const feeAmt=(p.entry*p.qty+exit*p.qty)*(S.cfg.fee/100)/2;
-  const today=new Date();const k=today.getFullYear()*10000+(today.getMonth()+1)*100+today.getDate();
+  const feeAmt=(p.entry*p.qty+exit*p.qty)*(S.cfg.fee/100)/2;   // ค่าธรรมเนียมไป-กลับ % คิดจากมูลค่าเฉลี่ยสองขา
   S.log.push({sym:p.sym,din:p.date,dout:k,entry:p.entry,exit:exit,qty:p.qty,fee:feeAmt,pl:gross-feeAmt});
   S.positions.splice(i,1);
+  msg.textContent='ปิดไม้ '+sym+' แล้ว กำไรขาดทุนสุทธิ '+fN(gross-feeAmt,0)+' บาท';
+  document.getElementById('clPrice').value='';
   markDirty();renderAll();
 }
 
 /* ---------- persistence ---------- */
 function exportState(slim){
-  S.meta={ver:VERSION,at:new Date().toISOString().slice(0,19).replace('T',' ')};
+  S.meta=Object.assign({},S.meta||{},{ver:VERSION,at:new Date().toISOString().slice(0,19).replace('T',' '),lastExport:Date.now()});
   let out=S;
   if(slim){
     out=JSON.parse(JSON.stringify(S));
@@ -1606,8 +1912,8 @@ function exportState(slim){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   const d=new Date().toISOString().slice(0,10);
   a.download='eod-system'+(slim?'-slim':'')+'-'+d+'.json';a.click();
-  stateBytes();dirty=false;showDirty();
-  document.getElementById('ioMsg').textContent='Export แล้ว ('+fmtMB(txt.length)+')'+(slim?' — ไฟล์ย่อ ตัดเหลือ 300 แท่งและไม่มีบัฟเฟอร์กระดาน ใช้พกพา แต่ทดสอบย้อนหลังได้สั้นลงและ breadth จะหยุดต่อเนื่อง':' — เก็บไฟล์นี้ไว้ เปิดครั้งหน้าใช้ Import กลับ');
+  stateBytes();markDirty();
+  document.getElementById('ioMsg').textContent='Export แล้ว ('+fmtMB(txt.length)+')'+(slim?' — ไฟล์ย่อ ตัดเหลือ 300 แท่งและไม่มีบัฟเฟอร์กระดาน ใช้พกพา แต่ทดสอบย้อนหลังได้สั้นลงและ breadth จะหยุดต่อเนื่อง':' — เก็บไฟล์นี้ไว้นอกเบราว์เซอร์เป็นสำรอง ถ้าเปลี่ยนเครื่องหรือเบราว์เซอร์ใช้ Import กลับ');
 }
 function importState(inp){
   const f=inp.files[0];if(!f)return;
@@ -1618,15 +1924,19 @@ function importState(inp){
     const at=(j.meta&&j.meta.at)?j.meta.at:'ไม่ทราบเวลา';
     const missing=[];
     for(const k of ['board','breadth','toAcc','uni'])if(j[k]==null)missing.push(k);
-    S=normalizeState(j);stateBytes();
+    const hadRules=!!(j.cfg&&j.cfg.rules);
+    if(S.positions.length+S.log.length>0&&!confirm('Import จะแทนที่ข้อมูลที่บันทึกอยู่ในเบราว์เซอร์นี้ทั้งหมด (ไม้ที่ถือ '+S.positions.length+' ตัว บันทึกเทรด '+S.log.length+' รายการ) ด้วยข้อมูลในไฟล์ — ทำต่อไหม?'))return;
+    S=normalizeState(j);resetCommon();rulesToDOM();stateBytes();
     const set=S.series['SET'];
     document.getElementById('ioMsg').innerHTML=
       'กู้คืนสำเร็จ — ไฟล์นี้ Export จากเวอร์ชัน '+from+' เมื่อ '+at+' กำลังเปิดด้วยเวอร์ชัน '+VERSION+'<br>'
       +'ข้อมูลที่ยกมาได้: ไม้ที่ถืออยู่ '+S.positions.length+' ตัว · บันทึกเทรด '+S.log.length+' รายการ · หุ้น '+(Object.keys(S.series).length-1)+' ตัว · ดัชนี '+(set?set.length+' วัน ถึง '+fmtD(set[set.length-1].k):'ไม่มี')+' · breadth '+(S.breadth||[]).length+' วัน · ขนาด '+fmtMB(sizeCache)
       +(missing.length?'<br>ส่วนที่ไฟล์เก่าไม่มีและถูกสร้างใหม่เป็นค่าว่าง: '+missing.join(', ')+' — โหลดไฟล์ EOD ใหม่หนึ่งครั้งเพื่อเติมให้ครบ':'')
-      +'<br>ตรวจตัวเลขด้านบนให้ตรงกับของเดิมก่อนใช้งานต่อ ถ้าไม่ตรงอย่าเพิ่ง Export ทับไฟล์เก่า';
-    dirty=false;showDirty();renderAll();
-  }catch(e){document.getElementById('ioMsg').textContent='ไฟล์ไม่ถูกต้อง'}};
+      +(hadRules?'':'<br>ไฟล์นี้มาจากเวอร์ชันที่ยังไม่จำชุดกฎ ระบบตั้งเป็น ระบบพื้นฐาน — ถ้าคุณเทรดด้วยกฎเสริมอยู่ ให้กดชุดกฎที่ใช้จริงในแท็บทดสอบย้อนหลังอีกครั้ง')
+      +(S.univVer<UNIV_VER?'<br>ข้อมูลในไฟล์นี้คัดหุ้นด้วยเกณฑ์เก่าที่ยังรวม DR และกองทุน ให้โหลดไฟล์ EOD ย้อนหลังทั้งชุดใหม่หนึ่งครั้ง':'')
+      +'<br>ตรวจตัวเลขด้านบนให้ตรงกับของเดิมก่อนใช้งานต่อ ถ้าไม่ตรงอย่าเพิ่ง Export ทับไฟล์เก่า · ข้อมูลนี้ถูกบันทึกลงเบราว์เซอร์แล้ว ครั้งหน้าไม่ต้อง Import';
+    markDirty();renderAll();
+  }catch(e){document.getElementById('ioMsg').textContent='ไฟล์ไม่ถูกต้อง'+(e&&e.message?' ('+e.message+')':'')}};
   rd.readAsText(f);inp.value='';
 }
 
@@ -1679,8 +1989,9 @@ async function buildDeep(files){
 
   /* ---- รอบที่ 1: เก็บรายการวันที่ และคัดรายชื่อหุ้นที่เคยมีสภาพคล่องพอ ---- */
   const dateSet=new Set(),cnt=Object.create(null),maxTO=Object.create(null);
+  const dayCnt=new Map();
   const scan=(text)=>eachRow(text,minK,(t,k,o,h,l,c,v)=>{
-    dateSet.add(k);
+    dateSet.add(k);dayCnt.set(k,(dayCnt.get(k)||0)+1);
     if(t==='SET')return;
     if(!isCommon(t))return;
     cnt[t]=(cnt[t]||0)+1;
@@ -1726,8 +2037,11 @@ async function buildDeep(files){
   const der=deriveAll(D,allC,syms,allSyms,N,ruleCfg());
   const mb=((syms.length+1)*N*11+allSyms.length*N)*4/1048576;
   DS={dates:dates,di:di,syms:syms,allSyms:allSyms,D:D,allC:allC,N:N,breadth:der.breadth};
-  const bl=der.breadth.filter(x=>!isNaN(x)).length;
-  msg.textContent='โหลดเสร็จแล้ว — ข้อมูล '+N+' วันทำการ ตั้งแต่ '+fmtD(dates[0])+' ถึง '+fmtD(dates[N-1])+' ครอบคลุมหุ้น '+syms.length+' ตัวที่เคยมีสภาพคล่องพอ จากทั้งกระดาน '+allSyms.length+' ตัว (รวมหุ้นที่ต่อมาซบเซาหรือหายไปจากตลาด จึงไม่ใช่การทดสอบเฉพาะหุ้นที่รอดมาถึงวันนี้) ใช้เวลา '+((Date.now()-t0)/1000).toFixed(0)+' วินาที'+(skipped?' | ข้ามไฟล์ที่เก่ากว่าปีที่ตั้งไว้ '+skipped+' ไฟล์':'')+' — ไปขั้นที่ 2 กดรันทดสอบได้เลย';
+  const setTv=Array.from(D['SET'].tv,x=>isNaN(x)?0:x);
+  const badD=detectBadDays(dates,dates.map(k=>dayCnt.get(k)||0),setTv);
+  msg.textContent='โหลดเสร็จแล้ว — ข้อมูล '+N+' วันทำการ ตั้งแต่ '+fmtD(dates[0])+' ถึง '+fmtD(dates[N-1])+' ครอบคลุมหุ้น '+syms.length+' ตัวที่เคยมีสภาพคล่องพอ จากทั้งกระดาน '+allSyms.length+' ตัว (รวมหุ้นที่ต่อมาซบเซาหรือหายไปจากตลาด จึงไม่ใช่การทดสอบเฉพาะหุ้นที่รอดมาถึงวันนี้) ใช้เวลา '+((Date.now()-t0)/1000).toFixed(0)+' วินาที'+(skipped?' | ข้ามไฟล์ที่เก่ากว่าปีที่ตั้งไว้ '+skipped+' ไฟล์':'')
+    +(badD.length?' | คำเตือน: ไฟล์ที่ดูไม่ครบ '+badD.length+' วัน ('+badD.slice(0,5).map(w=>fmtD(w.k)).join(', ')+(badD.length>5?' …':'')+') ผลทดสอบอาจเพี้ยนเล็กน้อยรอบวันเหล่านั้น':'')
+    +' — ไปขั้นที่ 2 กดรันทดสอบได้เลย';
   initBT();
 }
 
@@ -2160,34 +2474,43 @@ async function runSensitivity(){
 /* ---------- ตัวจับการแอบมองอนาคต ----------
    ทำสำเนาข้อมูลโดยบิดเบือนทุกค่าหลังวันตรวจ แล้วรันซ้ำ
    ถ้าเครื่องยนต์ซื่อสัตย์ ผลลัพธ์ก่อนวันตรวจต้องเหมือนเดิมทุกตัวอักษร */
+const RULE_FLAGS={rlRs:'rs',rlLadder:'ladder',rlCorr:'corr',rlLiq:'liq',rlGap:'gap',rlEven:'even',rlTrend:'trend'};
+const RULE_NUMS={rlRsLag:'rsLag',rlLadHi:'ladHi',rlLadLo:'ladLo',rlLadConfirm:'ladConfirm',rlCap0:'cap0',rlCap1:'cap1',rlCap2:'cap2',
+  rlCorrWin:'corrWin',rlCorrMax:'corrMax',rlCorrN:'corrMaxN',rlLiqPct:'liqPct',rlGapMax:'gapMax',rlAtrMult:'atrMult',rlSlip:'slipBps'};
+/* ชุดกฎเก็บใน S.cfg.rules — หน้าจอเป็นแค่ตัวแสดง จึงอยู่รอดข้ามการปิดหน้า และตรงกันทั้งหน้าทดสอบและกระดานสัญญาณ */
+function rulesToDOM(){
+  const r=S.cfg.rules||DEFAULT_RULES;
+  for(const id in RULE_FLAGS){const e=document.getElementById(id);if(e)e.checked=!!r[RULE_FLAGS[id]]}
+  for(const id in RULE_NUMS){const e=document.getElementById(id);if(e)e.value=r[RULE_NUMS[id]]}
+}
+function rulesFromDOM(){
+  const r=Object.assign({},DEFAULT_RULES,S.cfg.rules||{});
+  for(const id in RULE_FLAGS){const e=document.getElementById(id);if(e)r[RULE_FLAGS[id]]=!!e.checked}
+  for(const id in RULE_NUMS){const e=document.getElementById(id);if(!e||e.value==='')continue;const v=+e.value;if(isFinite(v))r[RULE_NUMS[id]]=v}
+  S.cfg.rules=r;
+}
+function ruleNames(R){
+  return [R.trend?'กรองแนวโน้มหุ้น':'',R.rs?'RS':'',R.ladder?'ลดไม้ตามตลาดกว้าง':'',R.corr?'เลี่ยงหุ้นวิ่งด้วยกัน':'',
+          R.liq?'จำกัดตามสภาพคล่อง':'',R.gap?'ไม่ไล่ราคา':'',R.even?'แบ่งเงินเท่ากันทุกช่อง':''].filter(x=>x);
+}
 function preset(kind){
-  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=v};
   const on={base:{rs:0,ladder:0,corr:0,liq:0,gap:0,even:0,trend:0},
             rs:{rs:1,ladder:0,corr:0,liq:0,gap:0,even:0,trend:0},
             trend:{rs:0,ladder:0,corr:0,liq:0,gap:0,even:0,trend:1},
             all:{rs:1,ladder:1,corr:1,liq:1,gap:1,even:1,trend:1}}[kind];
-  set('rlRs',!!on.rs);set('rlLadder',!!on.ladder);set('rlCorr',!!on.corr);
-  set('rlLiq',!!on.liq);set('rlGap',!!on.gap);set('rlEven',!!on.even);set('rlTrend',!!on.trend);
+  const r=Object.assign({},DEFAULT_RULES,S.cfg.rules||{});
+  for(const k in on)r[k]=!!on[k];
+  S.cfg.rules=r;rulesToDOM();markDirty();
   const nm={base:'ระบบพื้นฐาน (ปิดกฎเสริมทั้งหมด)',rs:'ระบบพื้นฐาน + RS',trend:'ระบบพื้นฐาน + กรองแนวโน้มหุ้น',all:'เปิดกฎเสริมทุกข้อ'}[kind];
-  document.getElementById('btMsg').textContent='ตั้งเป็น '+nm+' แล้ว — กดปุ่ม รันทดสอบ ในขั้นที่ 2 เพื่อดูผล';
+  document.getElementById('btMsg').textContent='ตั้งเป็น '+nm+' แล้ว (ระบบจำไว้ และใช้กับกระดานสัญญาณด้วย) — กดปุ่ม รันทดสอบ ในขั้นที่ 2 เพื่อดูผล';
 }
 function ruleCfg(){
-  const g=(id,d)=>{const e=document.getElementById(id);
-    if(!e||e.value===''||e.value==null)return d;
-    const v=+e.value;return isFinite(v)?v:d};
-  const ck=(id,d)=>{const e=document.getElementById(id);return e?!!e.checked:d};
+  const r=Object.assign({},DEFAULT_RULES,S.cfg.rules||{});
   return{
-    rsLag:g('rlRsLag',60),
-    ladHi:g('rlLadHi',55),ladLo:g('rlLadLo',40),ladConfirm:g('rlLadConfirm',3),
-    ladCaps:[g('rlCap0',5),g('rlCap1',3),g('rlCap2',1)],
-    rs:ck('rlRs',false),ladder:ck('rlLadder',false),
-    corr:ck('rlCorr',false),corrWin:g('rlCorrWin',60),corrMax:g('rlCorrMax',0.75),corrMaxN:g('rlCorrN',2),
-    liq:ck('rlLiq',false),liqPct:g('rlLiqPct',5),
-    gap:ck('rlGap',false),gapMax:g('rlGapMax',4),
-    even:ck('rlEven',false),
-    trend:ck('rlTrend',false),
-    slipBps:g('rlSlip',15),
-    atrMult:g('rlAtrMult',2)
+    rsLag:r.rsLag,ladHi:r.ladHi,ladLo:r.ladLo,ladConfirm:r.ladConfirm,ladCaps:[r.cap0,r.cap1,r.cap2],
+    rs:!!r.rs,ladder:!!r.ladder,corr:!!r.corr,corrWin:r.corrWin,corrMax:r.corrMax,corrMaxN:r.corrMaxN,
+    liq:!!r.liq,liqPct:r.liqPct,gap:!!r.gap,gapMax:r.gapMax,even:!!r.even,trend:!!r.trend,
+    slipBps:r.slipBps,atrMult:r.atrMult>0?r.atrMult:2
   };
 }
 function corruptAfter(ds,ci){
@@ -2326,7 +2649,7 @@ function runBT(){
   runBTLegacy();
 }
 function runBTLegacy(){
-  const AM=(ruleCfg().atrMult>0?ruleCfg().atrMult:2);
+  const AM=ruleCfg().atrMult;
   const msg=document.getElementById('btMsg');
   const set=S.series['SET'];
   if(!set||set.length<220){initBT();return}
@@ -2372,7 +2695,7 @@ function runBTLegacy(){
       const s=bk[n],bi=s.m[k];if(bi==null)continue;
       const c=s.b[bi].c,a=atr(s.b,20,bi),s50=sma(s.b,50,bi);
       pos[n].lastC=c;
-      if(a!=null){const nt=c-2*a;if(nt>pos[n].trail)pos[n].trail=nt}
+      if(a!=null){const nt=c-AM*a;if(nt>pos[n].trail)pos[n].trail=nt}
       if((s50!=null&&c<s50)||c<pos[n].trail)pendS.push({sym:n});
     }
     /* 3) regime + entries */
@@ -2387,7 +2710,7 @@ function runBTLegacy(){
         const s=bk[n],bi=s.m[k];if(bi==null||bi<70)continue;
         const c=s.b[bi].c,s50=sma(s.b,50,bi),h20=hh(s.b,20,bi),a=atr(s.b,20,bi);
         if(s50==null||h20==null||a==null||a<=0)continue;
-        if(c>h20&&c>s50)cands.push({sym:n,strength:c/s50,atr:a,qty:Math.floor(budget/(2*a)/100)*100});
+        if(c>h20&&c>s50)cands.push({sym:n,strength:c/s50,atr:a,qty:Math.floor(budget/(AM*a)/100)*100});
       }
       cands.sort((x,y)=>y.strength-x.strength);
       let slots=maxP-Object.keys(pos).length-pendB.length+pendS.length;
@@ -2554,6 +2877,13 @@ function renderBT(eq,trades,openList,cap0,simDays,regOffDays){
   document.getElementById('btTrades').innerHTML=h+'</table>';
 }
 
+function clearAll(){
+  if(!confirm('ล้างข้อมูลทั้งหมด ทั้งในหน้านี้และที่บันทึกไว้ในเบราว์เซอร์? (ควร Export สำรองก่อน)'))return;
+  S=freshState();resetCommon();rulesToDOM();
+  idbPut(null).catch(()=>{});
+  persist.savedAt=null;dirty=false;renderAll();
+}
+
 /* ---------- tabs ---------- */
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('act'));
@@ -2562,7 +2892,27 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   renderAll();
   if(b.dataset.t==='bt')initBT();
 });
-renderAll();
+/* ช่องกฎเสริมทุกช่อง: เปลี่ยนแล้วบันทึกลงสถานะทันที และมีผลกับกระดานสัญญาณ */
+for(const id of Object.keys(RULE_FLAGS).concat(Object.keys(RULE_NUMS))){
+  const e=document.getElementById(id);
+  if(e)e.addEventListener('change',()=>{rulesFromDOM();markDirty();renderAll()});
+}
+/* เริ่มต้น: โหลดสถานะที่บันทึกไว้ในเบราว์เซอร์ */
+(async function boot(){
+  rulesToDOM();renderAll();
+  try{
+    const rec=await idbGet();
+    persist.ok=true;
+    if(rec&&rec.state&&rec.state.cfg){
+      S=normalizeState(rec.state);resetCommon();rulesToDOM();stateBytes();
+      persist.savedAt=rec.at||null;
+    }
+    try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  }catch(e){
+    persist.ok=false;persist.err=(e&&e.message)||String(e);
+  }
+  renderAll();
+})();
 </script>
 </body>
 </html>
