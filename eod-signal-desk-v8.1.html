@@ -112,6 +112,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:15px}
 .tbw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
 table.tb th{text-align:left;font-size:13px;font-weight:700;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.tb td{padding:11px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+@media (max-width:600px){table.tb th,table.tb td{padding:9px 6px;font-size:14px}}
 table.tb th.r,table.tb td.r{text-align:right}
 .bar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;min-width:70px}
 .bar i{display:block;height:100%;border-radius:4px;background:var(--up)}
@@ -236,7 +237,7 @@ body.dragging::after{content:"วางไฟล์ที่นี่ — ไฟ
    ข้อมูลราคาเก็บเป็นก้อนรายปีใน IndexedDB (สร้างใหม่ได้เสมอจากไฟล์ siamchart)
    ไฟล์สำรอง .json เก็บเฉพาะข้อมูลของผู้ใช้ (ไม้ที่ถือ ประวัติเทรด ปันผล การตั้งค่า) จึงเล็กและย้ายเวอร์ชันง่าย
    ===================================================================== */
-const APP_VER='8.0', SCHEMA=8;
+const APP_VER='8.1', SCHEMA=8;
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const tick0=()=>new Promise(r=>setTimeout(r,0));
@@ -467,7 +468,7 @@ async function importFiles(list){
     for(const f of jsons)await restoreFile(f);
     if(data.length)await ingest(data);
     if(other)toast('ข้ามไฟล์ที่ไม่รู้จัก '+other+' ไฟล์ — รับเฉพาะ .zip .csv .json');
-    LAB.data=null;setBusyMsg('คำนวณสัญญาณล่าสุด');await tick0();await refreshLive();
+    LAB.D=null;LAB.F=null;LAB.res=null;setBusyMsg('คำนวณสัญญาณล่าสุด');await tick0();await refreshLive();
   }catch(e){console.error(e);toast('นำเข้าไม่สำเร็จ: '+(e.message||e))}
   finally{busy(false);render()}
 }
@@ -860,16 +861,20 @@ function badDays(){
   const D=LIVE.D,out=[],W=10;const ks=Array.from(D.dates);
   const cnt=ks.map(k=>MKT.dayRows[k]||0),vol=Array.from(D.setV);
   const med=a=>{const b=a.filter(x=>x>0).sort((x,y)=>x-y);return b.length?b[b.length>>1]:0};
+  const ack=new Set(S.meta.ack||[]);
   for(let i=0;i<ks.length;i++){
-    const lo=Math.max(0,i-W),hi=Math.min(ks.length,i+W+1),why=[];
+    if(ack.has(ks[i]))continue;
+    const lo=Math.max(0,i-W),hi=Math.min(ks.length,i+W+1);
     const nc=cnt.slice(lo,i).concat(cnt.slice(i+1,hi)),mc=med(nc);
-    if(cnt[i]>0&&mc>0&&nc.length>=5&&cnt[i]<0.6*mc)why.push(cnt[i].toLocaleString()+' แถว จากปกติราว '+mc.toLocaleString());
+    const rowsLow=cnt[i]>0&&mc>0&&nc.length>=5&&cnt[i]<0.6*mc;
     const nv=vol.slice(lo,i).concat(vol.slice(i+1,hi)),mv=med(nv);
-    if(vol[i]>0&&mv>0&&nv.length>=5&&vol[i]<0.3*mv)why.push('มูลค่าซื้อขาย SET '+fN(vol[i]/mv*100,0)+'% ของปกติ');
-    if(why.length)out.push({k:ks[i],why:why.join(' · ')});
+    const setLow=vol[i]>0&&mv>0&&nv.length>=5&&vol[i]<0.3*mv;
+    if(rowsLow)out.push({k:ks[i],kind:'rows',why:'มีหุ้น '+cnt[i].toLocaleString()+' ตัว จากปกติราว '+mc.toLocaleString()+' ตัว'});
+    else if(setLow)out.push({k:ks[i],kind:'set',why:'แท่งดัชนี SET ในไฟล์ของ siamchart ไม่ครบ (มูลค่าซื้อขาย '+fN(vol[i]/mv*100,0)+'% ของปกติ) ส่วนข้อมูลหุ้นรายตัวครบ'});
   }
   return out;
 }
+function ackDay(k){S.meta.ack=[...new Set([...(S.meta.ack||[]),k])];save();render();toast('รับทราบแล้ว — ซ่อนคำเตือนวันที่ '+fmtK(k,1))}
 function dataChecks(){
   const out=[];const ys=Object.keys(MKT.years).map(Number).sort((a,b)=>a-b);
   if(!ys.length){out.push({s:'bad',t:'ยังไม่มีข้อมูลราคา',f:'กดนำเข้าไฟล์ แล้วเลือกไฟล์ EOD ของ siamchart (ชุดปี 1970 + ชุดต้นปี + ชุดวันล่าสุด) พร้อมกัน'});return{ready:false,items:out}}
@@ -881,8 +886,11 @@ function dataChecks(){
     out.push(gap<=0?{s:'ok',t:'ข้อมูลล่าสุด '+fmtK(MKT.lastK,1)+' — เป็นปัจจุบัน'}
       :{s:'warn',t:'ข้อมูลล่าสุด '+fmtK(MKT.lastK,1)+' — ขาด '+gap+' วันทำการ',f:'นำเข้าไฟล์ชุดวันล่าสุดหรือชุดต้นปี ถ้าวันที่ขาดเป็นวันหยุดตลาดข้ามได้'});
   }
-  const bd=badDays().slice(-5);
-  if(bd.length)out.push({s:'warn',t:'ไฟล์ที่ดูไม่ครบ: '+bd.map(b=>fmtK(b.k)).join(', '),f:'โหลดไฟล์วันนั้นจาก siamchart ใหม่แล้วนำเข้าอีกครั้ง ระบบเขียนทับให้เอง ('+bd[bd.length-1].why+')'});
+  for(const b of badDays().slice(-5)){
+    const btn='<button class="btn sm ghost" style="margin-top:6px" onclick="ackDay('+b.k+')">รับทราบ ซ่อนคำเตือนนี้</button>';
+    if(b.kind==='rows')out.push({s:'warn',t:'ไฟล์วันที่ '+fmtK(b.k,1)+' ดูไม่ครบ',f:b.why+' — โหลดไฟล์วันนั้นจาก siamchart ใหม่แล้วนำเข้าอีกครั้ง ระบบเขียนทับให้เอง ถ้าโหลดใหม่แล้วยังเหมือนเดิม แปลว่าต้นทางเป็นแบบนี้ กดรับทราบได้<br>'+btn});
+    else out.push({s:'info',t:'ข้อสังเกตวันที่ '+fmtK(b.k,1),f:b.why+' — กระทบแค่ราคาปิดดัชนีวันนั้นวันเดียว เส้นเฉลี่ย 200 วันแทบไม่เปลี่ยน และไม่กระทบสัญญาณหุ้น<br>'+btn});
+  }
   const L=MKT.lastImport;
   if(L){const bad=L.files.filter(f=>f.errs.length);if(bad.length)out.push({s:'warn',t:'การนำเข้าล่าสุดมีไฟล์ที่อ่านไม่ได้ '+bad.length+' ไฟล์',f:bad[0].name+': '+bad[0].errs[0]})}
   if(storeOK===false)out.push({s:'bad',t:'เบราว์เซอร์นี้บันทึกข้อมูลไม่ได้',f:'เปิดไฟล์นี้ด้วย Chrome หรือ Edge'});
@@ -929,8 +937,8 @@ function renderHome(){
   const nS=plan.sells.length,nB=plan.buys.length;
   const head=nS||nB?'พรุ่งนี้ '+[nS?'ขาย '+nS+' ตัว':'',nB?'ซื้อ '+nB+' ตัว':''].filter(x=>x).join(' · '):'พรุ่งนี้ไม่ต้องส่งคำสั่ง';
   const acts=[];
-  const issues=ck.items.filter(x=>x.s==='bad'||x.s==='warn');
-  for(const x of issues.filter(x=>/ขาด|ไม่ครบ|อ่านไม่ได้/.test(x.t)))acts.push(actHTML('warn','alert',x.t,x.f));
+  const stale=ck.items.find(x=>x.s==='warn'&&/ขาด/.test(x.t));
+  const notes=ck.items.filter(x=>x.s==='warn'||x.s==='bad').length;
   for(const x of plan.sells)acts.push(actHTML('down','sell','ขาย '+x.sym+' '+x.q.toLocaleString()+' หุ้น','ช่วงเปิดตลาด · '+x.why+(x.exitK!==x.lastK?' ตั้งแต่ '+fmtK(x.exitK)+' ขายทันที':'')+(x.split!==1?' · จำนวนหุ้นปรับตามการแตกพาร์แล้ว':''),'<button class="btn sm ghost" onclick="sellSheet(\''+x.p.id+'\')">บันทึกขาย</button>'));
   for(const b of plan.buys)acts.push(actHTML('up','buy','ซื้อ '+b.sym+' ประมาณ '+b.q.toLocaleString()+' หุ้น','≈ '+fB(b.amt)+' บาท · จุดตัดขาดทุนเริ่มต้นราว '+fN(b.stop),'<button class="btn sm ghost" onclick="buySheet(\''+b.sym+'\','+b.q+')">บันทึกซื้อ</button>'));
   if(!nS&&!nB){
@@ -945,7 +953,8 @@ function renderHome(){
   el.innerHTML=topbar('วันนี้','ข้อมูลปิดวันที่ '+fmtK(plan.k,1)+' · '+P.name+' · Top '+P.maxpos,'<button class="btn ghost" onclick="pickFiles()">'+icon('upload')+'นำเข้าไฟล์วันใหม่</button>')
     +'<div class="card hero"><div class="top">'
     +(plan.rg?chip('up','ตลาดเปิดให้ซื้อ',1):chip('down','ไม่เปิดไม้ใหม่',1))
-    +chip(issues.some(x=>/ขาด/.test(x.t))?'warn':'mute','ข้อมูลถึง '+fmtK(plan.k),1)+'</div>'
+    +chip(stale?'warn':'mute','ข้อมูลถึง '+fmtK(plan.k)+(stale?' · ยังไม่ใช่วันล่าสุด':''),1)
+    +(notes?'<button class="chip warn" style="border:none;cursor:pointer" onclick="go(\'set\')">ข้อสังเกตข้อมูล '+notes+' ข้อ ›</button>':'')+'</div>'
     +'<div class="hl">'+head+'</div><div class="when">ทำตอนเปิดตลาดวันทำการถัดไป · ระบบทดสอบสมมติว่าได้ราคาเปิด</div>'
     +'<div class="acts">'+acts.join('')+'</div>'
     +'<div class="row" style="margin-top:16px"><button class="btn" onclick="copyOrders()">'+icon('copy')+'คัดลอกใบสั่งงาน</button><button class="btn ghost" onclick="buySheet()">'+icon('plus')+'บันทึกซื้อ</button></div>'
@@ -1052,102 +1061,107 @@ function renderHist(){
   el.innerHTML=h+'</div>';
 }
 
-/* ---------------- ทดสอบย้อนหลัง ---------------- */
-const LAB={data:null,key:'',preset:null,topN:null,period:'all',cap:1000000,res:null,cmp:null,roll:null};
-const PERIODS=[['all','ทั้งหมด'],['10','10 ปี'],['5','5 ปี'],['hold','2565-ปัจจุบัน']];
+/* ---------------- ทดสอบย้อนหลัง: กดครั้งเดียว ได้ทุกช่วงเวลา ทุกชุดกฎ ---------------- */
+const LAB={D:null,F:null,cap:1000000,res:null,sel:'all',cfg:null,metric:'cagr'};
+const LAB_CFGS=[['v8t10','กฎ v8 · Top 10','v8',10],['v8t5','กฎ v8 · Top 5','v8',5],['v7','กฎ v7 เดิม','v7',5]];
+const LAB_PER=[['3','3 ปี',3],['5','5 ปี',5],['7','7 ปี',7],['10','10 ปี',10],['15','15 ปี',15],['all','ทั้งหมด',0]];
 function labP(preset,topN){const p=Object.assign({},PRESETS[preset]);p.maxpos=topN||p.maxpos;p.feeSide=(S.settings.fee||0)/100/2;return p}
-async function labData(P){
-  const key=[P.bo,P.trend,P.exitSma,P.minTO].join('|');
-  if(LAB.data&&LAB.key===key)return LAB.data;
-  LAB.data=null;await tick0();
+function myCfg(){const s=S.settings;return s.preset==='v7'?'v7':(s.topN==5?'v8t5':'v8t10')}
+async function labLoad(){
+  if(LAB.D)return;
   const keys=await blockKeys();if(!keys.length)throw new Error('ยังไม่มีข้อมูลราคา — นำเข้าไฟล์ในหน้าตั้งค่าก่อน');
   const D=await loadMarket(Math.min(...keys),Math.max(...keys),m=>setBusyMsg(m));
   setBusyMsg('ปรับราคาแตกพาร์ '+D.M.toLocaleString()+' หุ้น');await tick0();adjustSplits(D);
-  setBusyMsg('คำนวณอินดิเคเตอร์');await tick0();
-  const F=buildFeatures(D,P,false);
-  D.O=D.O;D.H=null;D.L=null;D.V=null;                            // คืนหน่วยความจำที่ไม่ใช้แล้ว
-  LAB.data={D:D,F:F};LAB.key=key;return LAB.data;
+  const F={};
+  for(const pr of ['v8','v7']){setBusyMsg('คำนวณอินดิเคเตอร์ '+PRESETS[pr].name);await tick0();F[pr]=buildFeatures(D,labP(pr),false)}
+  D.H=null;D.L=null;D.V=null;                                  // คืนหน่วยความจำที่ไม่ใช้แล้ว
+  LAB.D=D;LAB.F=F;
 }
-function periodRange(D){
+function perRange(D,years){
   const first=D.dates[Math.min(260,D.N-1)],last=D.dates[D.N-1];
-  if(LAB.period==='hold')return[20220101,last];
-  if(LAB.period==='10'||LAB.period==='5'){const y=kY(last)-(+LAB.period);return[Math.max(first,y*10000+kM(last)*100+kD(last)),last]}
-  return[first,last];
+  if(!years)return[first,last];
+  const a=(kY(last)-years)*10000+kM(last)*100+kD(last);
+  return a<first?null:[a,last];
 }
-async function runLab(mode){
+async function runLab(){
   if(busyN>0)return;
   busy(true,'กำลังเตรียมข้อมูลทดสอบ…');
   try{
-    const pr=LAB.preset||S.settings.preset,tn=LAB.topN||S.settings.topN;
-    const P=labP(pr,tn);const {D,F}=await labData(P);
-    const [a,b]=periodRange(D);
-    setBusyMsg('กำลังจำลองการเทรด');await tick0();
-    LAB.res=Object.assign(simulate(D,F,P,a,b,LAB.cap),{P:P,a:a,b:b});
-    LAB.cmp=null;LAB.roll=null;
-    if(mode==='cmp'){
-      const other=pr==='v8'?'v7':'v8';const P2=labP(other,null);
-      const d2=await labData(P2);
-      const r2=simulate(d2.D,d2.F,P2,a,b,LAB.cap);
-      LAB.cmp={P:P2,r:r2};
-      await labData(P);                                          // กลับมาใช้ชุดหลัก
-    }
-    if(mode==='roll'){
-      const ys=[];const y0=kY(a),y1=kY(b);const rows=[];
-      for(let y=y0;y+5<=y1+1;y++){
-        setBusyMsg('ช่วง '+y+'-'+(y+5));await tick0();
-        const r=simulate(D,F,P,y*10000+101,Math.min(b,(y+5)*10000+101),LAB.cap);
-        if(!r.empty)rows.push({y:y,cagr:r.cagr,mdd:r.mdd,b:r.bCagr});
+    await labLoad();const D=LAB.D;const rows=[];
+    for(const [pk,pl,yrs] of LAB_PER){
+      const rg=perRange(D,yrs);if(!rg){rows.push({pk:pk,pl:pl,none:true});continue}
+      const row={pk:pk,pl:pl,a:rg[0],b:rg[1],r:{}};
+      for(const [ck,cl,pr,tn] of LAB_CFGS){
+        setBusyMsg('จำลอง '+pl+' · '+cl);await tick0();
+        const P=labP(pr,tn);const r=simulate(D,LAB.F[pr],P,rg[0],rg[1],LAB.cap);r.P=P;row.r[ck]=r;
       }
-      LAB.roll=rows;
+      rows.push(row);
     }
+    /* ทุกช่วง 5 ปี ของชุดกฎที่ใช้อยู่ */
+    const mc=myCfg(),c=LAB_CFGS.find(x=>x[0]===mc),P=labP(c[2],c[3]);const roll=[];
+    const all=rows.find(r=>r.pk==='all');
+    for(let y=kY(all.a);y+5<=kY(all.b)+1;y++){const r=simulate(D,LAB.F[c[2]],P,y*10000+101,Math.min(all.b,(y+5)*10000+101),LAB.cap);if(!r.empty)roll.push({y:y,e:Math.min(y+5,kY(all.b)),cagr:r.cagr,mdd:r.mdd,b:r.bCagr})}
+    LAB.res={rows:rows,roll:roll,at:Date.now()};LAB.cfg=LAB.cfg||mc;
   }catch(e){console.error(e);toast('ทดสอบไม่สำเร็จ: '+(e.message||e))}
   finally{busy(false);render()}
 }
+const METRICS=[['cagr','ผลตอบแทนต่อปี'],['mdd','ลดลงมากสุด'],['ret','ผลตอบแทนรวม'],['n','จำนวนไม้']];
+function mval(r,m){if(!r||r.empty)return '—';if(m==='cagr')return fP(r.cagr);if(m==='mdd')return fN(r.mdd,1)+'%';if(m==='ret')return fP(r.ret,0);return r.n.toLocaleString()}
+function bval(r,m){if(!r||r.empty)return '—';if(m==='cagr')return fP(r.bCagr);if(m==='mdd')return fN(r.bMdd,1)+'%';if(m==='ret')return fP(r.bRet,0);return '—'}
 function renderLab(){
-  const el=$('pg-lab');
-  const pr=LAB.preset||S.settings.preset,tn=LAB.topN||S.settings.topN;
-  let h=topbar('ทดสอบย้อนหลัง','จำลองการเทรดด้วยข้อมูลจริงทั้งกระดาน รวมหุ้นที่เลิกซื้อขายไปแล้ว ค่าธรรมเนียมและ slippage ครบ');
-  h+='<div class="card"><div class="form">'
-    +'<div class="field"><label>ชุดกฎ</label><div class="seg" id="labPreset">'+Object.keys(PRESETS).map(k=>'<button class="'+(pr===k?'on':'')+'" onclick="LAB.preset=\''+k+'\';LAB.topN=null;render()">'+PRESETS[k].name+'</button>').join('')+'</div></div>'
-    +'<div class="field"><label>จำนวนไม้สูงสุด</label><div class="seg">'+[5,10].map(n=>'<button class="'+(tn==n?'on':'')+'" onclick="LAB.topN='+n+';render()">Top '+n+'</button>').join('')+'</div></div>'
-    +'<div class="field"><label>ช่วงเวลา</label><div class="seg">'+PERIODS.map(([k,l])=>'<button class="'+(LAB.period===k?'on':'')+'" onclick="LAB.period=\''+k+'\';render()">'+l+'</button>').join('')+'</div></div>'
-    +'<div class="field"><label for="labCap">เงินเริ่มต้น (บาท)</label><input class="inp" id="labCap" type="number" step="50000" value="'+LAB.cap+'" onchange="LAB.cap=+this.value||1000000"></div>'
-    +'</div><div class="note" style="margin-top:14px">'+PRESETS[pr].desc+'</div>'
-    +'<div class="row" style="margin-top:14px"><button class="btn" onclick="runLab()">รันทดสอบ</button><button class="btn ghost" onclick="runLab(\'cmp\')">เทียบกับ'+(pr==='v8'?PRESETS.v7.name:PRESETS.v8.name)+'</button><button class="btn ghost" onclick="runLab(\'roll\')">ทุกช่วง 5 ปี</button></div>'
-    +'<div class="desc" style="margin:10px 0 0">ครั้งแรกใช้เวลาเตรียมข้อมูลราว 10-30 วินาที ครั้งต่อไปเร็วขึ้น · ใช้ข้อมูลที่นำเข้าไว้ในเครื่องทั้งหมด</div></div>';
+  const el=$('pg-lab');const mc=myCfg();
+  let h=topbar('ทดสอบย้อนหลัง','กดครั้งเดียว เทียบทุกชุดกฎ ทุกช่วงเวลา — ข้อมูลจริงทั้งกระดาน รวมหุ้นที่เลิกซื้อขาย ค่าธรรมเนียมและ slippage ครบ');
+  h+='<div class="card"><div class="row" style="align-items:flex-end">'
+    +'<div class="field" style="max-width:240px"><label for="labCap">เงินเริ่มต้น (บาท)</label><input class="inp" id="labCap" type="number" step="50000" value="'+LAB.cap+'" onchange="LAB.cap=+this.value||1000000"></div>'
+    +'<button class="btn" onclick="runLab()">'+icon('lab')+(LAB.res?'รันใหม่':'รันทดสอบทุกช่วง')+'</button></div>'
+    +'<div class="desc" style="margin:10px 0 0">ครั้งแรกใช้เวลาราว 10-30 วินาที · ช่วง 3 / 5 / 7 / 10 / 15 ปี นับย้อนจากวันล่าสุดที่มีข้อมูล</div></div>';
   const R=LAB.res;
-  if(R&&!R.empty){
-    h+='<div class="card"><div class="card-h"><h2>ผลทดสอบ '+R.P.name+' Top '+R.P.maxpos+'</h2><div class="sp"></div><span class="chip mute">'+fmtK(R.a,1)+' – '+fmtK(R.b,1)+'</span></div><div class="tiles">'
-      +tileHTML('ผลตอบแทนต่อปี',fP(R.cagr),'ถือ SET เฉย ๆ '+fP(R.bCagr),R.cagr>=0?'pos':'neg')
-      +tileHTML('ลดลงจากจุดสูงสุดมากสุด',fN(R.mdd,1)+'%','SET '+fN(R.bMdd,1)+'%','neg')
-      +tileHTML('เงินปลายทาง',fB(R.end),'รวม '+fP(R.ret,0))
-      +tileHTML('จำนวนไม้',R.n.toLocaleString(),'ชนะ '+fN(R.wr,0)+'% · PF '+(R.pf?fN(R.pf,2):'—'))
-      +tileHTML('ปีที่แย่ที่สุด',fP(R.worstY),'Sharpe '+fN(R.sharpe,2),R.worstY>=0?'pos':'neg')
-      +tileHTML('เวลาที่มีหุ้นในพอร์ต',fN(R.expo,0)+'%','ตลาดเปิดให้ซื้อ '+fN(R.regPct,0)+'% ของวัน')
-      +'</div>';
-    if(LAB.cmp){const C=LAB.cmp.r;h+='<div class="tbw" style="margin-top:16px"><table class="tb"><tr><th>ชุดกฎ</th><th class="r">ต่อปี</th><th class="r">ลดลงมากสุด</th><th class="r">ไม้</th><th class="r">ชนะ</th><th class="r">ปีแย่สุด</th></tr>'
-      +[[R.P,R],[LAB.cmp.P,C]].map(([p,r])=>'<tr><td><b>'+p.name+' Top '+p.maxpos+'</b></td><td class="r '+(r.cagr>=0?'pos':'neg')+'">'+fP(r.cagr)+'</td><td class="r neg">'+fN(r.mdd,1)+'%</td><td class="r">'+r.n+'</td><td class="r">'+fN(r.wr,0)+'%</td><td class="r">'+fP(r.worstY)+'</td></tr>').join('')
-      +'<tr><td class="mut">ถือ SET เฉย ๆ (ไม่รวมปันผล)</td><td class="r">'+fP(R.bCagr)+'</td><td class="r neg">'+fN(R.bMdd,1)+'%</td><td></td><td></td><td></td></tr></table></div>'}
-    h+='<h2 style="margin:22px 0 4px;font-size:17px">เงินในพอร์ต เทียบถือ SET</h2><div id="labEq"></div>'
-      +'<h2 style="margin:22px 0 4px;font-size:17px">ลดลงจากจุดสูงสุด</h2><div class="desc" style="margin:0 0 6px">ยิ่งลึกและยาว ยิ่งยากที่จะทำตามระบบต่อ — ช่วงแย่สุด '+fmtK(R.mddFrom)+' ถึง '+fmtK(R.mddTo)+'</div><div id="labDD"></div>'
+  if(R){
+    h+='<div class="card"><div class="card-h"><h2>สรุปทุกช่วงเวลา</h2><div class="sp"></div><div class="seg">'
+      +METRICS.map(([k,l])=>'<button class="'+(LAB.metric===k?'on':'')+'" onclick="LAB.metric=\''+k+'\';render()">'+l+'</button>').join('')+'</div></div>'
+      +'<div class="desc">แตะแถวเพื่อดูกราฟของช่วงนั้น · คอลัมน์ที่มีป้าย ใช้อยู่ คือชุดกฎในหน้าตั้งค่า</div>'
+      +'<div class="tbw"><table class="tb"><tr><th>ช่วง</th>'+LAB_CFGS.map(([ck,cl])=>'<th class="r">'+cl.replace('กฎ ','').replace(' เดิม','')+(ck===mc?'<div><span class="chip info" style="padding:1px 8px;font-size:12px">ใช้อยู่</span></div>':'')+'</th>').join('')+'<th class="r">SET</th></tr>';
+    for(const row of R.rows){
+      if(row.none){h+='<tr><td>'+row.pl+'</td><td class="r mut" colspan="4">ข้อมูลไม่ถึง</td></tr>';continue}
+      const vals=LAB_CFGS.map(([ck])=>row.r[ck]);
+      const key=LAB.metric==='mdd'?(r=>r.mdd):LAB.metric==='n'?null:(r=>LAB.metric==='ret'?r.ret:r.cagr);
+      const best=key?Math.max(...vals.map(key)):null;
+      h+='<tr style="cursor:pointer'+(LAB.sel===row.pk?';background:var(--brandBg)':'')+'" onclick="LAB.sel=\''+row.pk+'\';render()"><td><b>'+row.pl+'</b><div class="mut" style="font-size:13px">'+fmtK(row.a)+' – '+fmtK(row.b)+'</div></td>'
+        +LAB_CFGS.map(([ck])=>{const r=row.r[ck];const v=key?key(r):null;const cls=LAB.metric==='mdd'?'neg':LAB.metric==='n'?'':(v>=0?'pos':'neg');
+          return '<td class="r '+cls+'">'+(key&&v===best?'<b>'+mval(r,LAB.metric)+'</b>':mval(r,LAB.metric))+'</td>'}).join('')
+        +'<td class="r mut">'+bval(row.r.v8t10,LAB.metric)+'</td></tr>';
+    }
+    h+='</table></div><div class="desc" style="margin:10px 0 0">ตัวหนา = ดีที่สุดในแถวนั้น · ถือ SET ไม่รวมปันผล · ผลทดสอบไม่นับปันผลเช่นกัน</div></div>';
+    const row=R.rows.find(r=>r.pk===LAB.sel&&!r.none)||R.rows.find(r=>r.pk==='all');
+    const cfg=LAB.cfg||mc,res=row.r[cfg],cl=LAB_CFGS.find(x=>x[0]===cfg)[1];
+    h+='<div class="card"><div class="card-h"><h2>'+row.pl+' · '+cl+'</h2><div class="sp"></div><div class="seg">'
+      +LAB_CFGS.map(([ck,l])=>'<button class="'+(cfg===ck?'on':'')+'" onclick="LAB.cfg=\''+ck+'\';render()">'+l.replace('กฎ ','')+'</button>').join('')+'</div></div>'
+      +'<div class="desc">'+fmtK(row.a,1)+' – '+fmtK(row.b,1)+' · เงินเริ่มต้น '+fB(LAB.cap)+' บาท</div><div class="tiles">'
+      +tileHTML('ผลตอบแทนต่อปี',fP(res.cagr),'ถือ SET '+fP(res.bCagr),res.cagr>=0?'pos':'neg')
+      +tileHTML('ลดลงมากสุด',fN(res.mdd,1)+'%','SET '+fN(res.bMdd,1)+'%','neg')
+      +tileHTML('เงินปลายทาง',fB(res.end),'รวม '+fP(res.ret,0))
+      +tileHTML('จำนวนไม้',res.n.toLocaleString(),'ชนะ '+fN(res.wr,0)+'% · PF '+(res.pf?fN(res.pf,2):'—'))
+      +tileHTML('ปีที่แย่ที่สุด',fP(res.worstY),'Sharpe '+fN(res.sharpe,2),res.worstY>=0?'pos':'neg')
+      +tileHTML('เวลาที่มีหุ้นในพอร์ต',fN(res.expo,0)+'%','ตลาดเปิดให้ซื้อ '+fN(res.regPct,0)+'% ของวัน')
+      +'</div>'
+      +'<h2 style="margin:22px 0 4px;font-size:17px">เงินในพอร์ต เทียบถือ SET</h2><div id="labEq"></div>'
+      +'<h2 style="margin:22px 0 4px;font-size:17px">ลดลงจากจุดสูงสุด</h2><div class="desc" style="margin:0 0 6px">ช่วงแย่สุด '+fmtK(res.mddFrom)+' ถึง '+fmtK(res.mddTo)+' — ยิ่งลึกและยาว ยิ่งยากที่จะทำตามระบบต่อ</div><div id="labDD"></div>'
       +'<h2 style="margin:22px 0 4px;font-size:17px">ผลตอบแทนรายปี</h2><div id="labYr"></div>';
-    if(LAB.roll&&LAB.roll.length){h+='<h2 style="margin:22px 0 8px;font-size:17px">ถ้าเริ่มคนละปี ถือ 5 ปี</h2><div class="tbw"><table class="tb"><tr><th>ช่วง</th><th class="r">ต่อปี</th><th class="r">ลดลงมากสุด</th><th class="r">SET ต่อปี</th></tr>'
-      +LAB.roll.map(r=>'<tr><td>'+(r.y+543)+'–'+(Math.min(r.y+5,kY(R.b))+543)+'</td><td class="r '+(r.cagr>=0?'pos':'neg')+'">'+fP(r.cagr)+'</td><td class="r neg">'+fN(r.mdd,1)+'%</td><td class="r">'+fP(r.b)+'</td></tr>').join('')+'</table></div>'}
-    const tr=R.trades.slice(-300).reverse();
-    h+='<details class="more" style="margin-top:14px"><summary>ดูรายการเทรด ('+R.trades.length.toLocaleString()+' ไม้'+(R.open.length?' + ยังถือ '+R.open.length:'')+')</summary><div class="tbw"><table class="tb"><tr><th>หุ้น</th><th>ซื้อ</th><th>ขาย</th><th class="r">ราคา</th><th class="r">กำไรสุทธิ</th></tr>'
-      +R.open.map(t=>'<tr><td><b>'+t.sym+'</b> '+chip('info','ยังถือ')+'</td><td>'+fmtK(t.din)+'</td><td>—</td><td class="r">'+fN(t.pin)+' → '+fN(t.pout)+'</td><td class="r '+(t.pl>=0?'pos':'neg')+'">'+fB(t.pl)+'</td></tr>').join('')
-      +tr.map(t=>'<tr><td><b>'+t.sym+'</b></td><td>'+fmtK(t.din)+'</td><td>'+fmtK(t.dout)+'</td><td class="r">'+fN(t.pin)+' → '+fN(t.pout)+'</td><td class="r '+(t.pl>=0?'pos':'neg')+'">'+fB(t.pl)+'</td></tr>').join('')+'</table></div></details>';
-    h+='<div class="note" style="margin-top:14px">ผลนี้ไม่นับเงินปันผล (ข้อมูลราคาไม่มี) ผลจริงจึงน่าจะดีกว่าเล็กน้อย · ผลอดีตไม่รับประกันอนาคต</div></div>';
+    if(R.roll.length)h+='<details class="more" style="margin-top:14px"><summary>ถ้าเริ่มคนละปี ถือ 5 ปี ('+LAB_CFGS.find(x=>x[0]===mc)[1]+')</summary><div class="tbw"><table class="tb"><tr><th>ช่วง</th><th class="r">ต่อปี</th><th class="r">ลดลงมากสุด</th><th class="r">SET ต่อปี</th></tr>'
+      +R.roll.map(r=>'<tr><td>'+(r.y+543)+'–'+(r.e+543)+'</td><td class="r '+(r.cagr>=0?'pos':'neg')+'">'+fP(r.cagr)+'</td><td class="r neg">'+fN(r.mdd,1)+'%</td><td class="r">'+fP(r.b)+'</td></tr>').join('')+'</table></div></details>';
+    const tr=res.trades.slice(-300).reverse();
+    h+='<details class="more"><summary>ดูรายการเทรด ('+res.trades.length.toLocaleString()+' ไม้'+(res.open.length?' + ยังถือ '+res.open.length:'')+')</summary><div class="tbw"><table class="tb"><tr><th>หุ้น</th><th>ซื้อ</th><th>ขาย</th><th class="r">ราคา</th><th class="r">กำไรสุทธิ</th></tr>'
+      +res.open.map(t=>'<tr><td><b>'+t.sym+'</b> '+chip('info','ยังถือ')+'</td><td>'+fmtK(t.din)+'</td><td>—</td><td class="r">'+fN(t.pin)+' → '+fN(t.pout)+'</td><td class="r '+(t.pl>=0?'pos':'neg')+'">'+fB(t.pl)+'</td></tr>').join('')
+      +tr.map(t=>'<tr><td><b>'+t.sym+'</b></td><td>'+fmtK(t.din)+'</td><td>'+fmtK(t.dout)+'</td><td class="r">'+fN(t.pin)+' → '+fN(t.pout)+'</td><td class="r '+(t.pl>=0?'pos':'neg')+'">'+fB(t.pl)+'</td></tr>').join('')+'</table></div></details></div>';
+    el.innerHTML=h+researchCard();
+    const b0=res.bench[0];
+    lineChart($('labEq'),{dates:res.dates,series:[{name:cl,color:'var(--s1)',v:res.eq},{name:'ถือ SET',color:'var(--bench)',v:res.bench.map(x=>x/b0*LAB.cap),w:1.5}],base:LAB.cap,fmt:fB,axisFmt:fAxis,h:260,log:true});
+    let pk=-Infinity;const dd=res.eq.map(v=>{pk=Math.max(pk,v);return (v/pk-1)*100});
+    lineChart($('labDD'),{dates:res.dates,series:[{name:'ลดลงจากจุดสูงสุด',color:'var(--down)',v:dd}],fmt:v=>fN(v,1)+'%',h:170,area:true,zero:true});
+    barChart($('labYr'),{labels:res.years.map(y=>String(y.y+543)),series:[{name:cl,color:'var(--s1)',v:res.years.map(y=>y.r)},{name:'ถือ SET',color:'var(--bench)',v:res.years.map(y=>y.b)}],fmt:v=>fP(v,0),h:220});
+    return;
   }
-  h+=researchCard();
-  el.innerHTML=h;
-  if(R&&!R.empty){
-    const b0=R.bench[0];
-    lineChart($('labEq'),{dates:R.dates,series:[{name:R.P.name,color:'var(--s1)',v:R.eq},{name:'ถือ SET',color:'var(--bench)',v:R.bench.map(x=>x/b0*LAB.cap),w:1.5}],base:LAB.cap,fmt:fB,axisFmt:fAxis,h:260,log:true});
-    let pk=-Infinity;const dd=R.eq.map(v=>{pk=Math.max(pk,v);return (v/pk-1)*100});
-    lineChart($('labDD'),{dates:R.dates,series:[{name:'ลดลงจากจุดสูงสุด',color:'var(--down)',v:dd}],fmt:v=>fN(v,1)+'%',h:170,area:true,zero:true});
-    barChart($('labYr'),{labels:R.years.map(y=>String(y.y+543)),series:[{name:R.P.name,color:'var(--s1)',v:R.years.map(y=>y.r)},{name:'ถือ SET',color:'var(--bench)',v:R.years.map(y=>y.b)}],fmt:v=>fP(v,0),h:220});
-  }
+  el.innerHTML=h+researchCard();
 }
 function researchCard(){
   return '<div class="card"><h2>ทำไมต้องกฎ v8</h2><div class="desc">วิจัยด้วยข้อมูลหุ้นสามัญไทยทุกตัว 2548–2569 (รวมหุ้นที่เลิกซื้อขายแล้ว) ปรับราคาแตกพาร์ 322 เหตุการณ์ คิดค่าธรรมเนียม 0.16% และ slippage 0.15% ทุกขา · เลือกกฎจากช่วง 2549–2564 เท่านั้น แล้วทดสอบครั้งเดียวกับช่วง 2565–2569 ที่ไม่เคยใช้เลือก</div>'
@@ -1201,17 +1215,17 @@ function renderSet(){
   h+='<div class="desc" style="text-align:center">EOD Signal Desk v'+APP_VER+'</div>';
   el.innerHTML=h;
 }
-function setRule(k,v){S.settings[k]=v;save();LAB.preset=null;LAB.topN=null;replan(true)}
+function setRule(k,v){S.settings[k]=v;save();LAB.cfg=null;replan(true)}
 function saveSettings(){
   const s=S.settings;s.capital=Math.max(0,+$('stCap').value||0);s.fee=Math.max(0,+$('stFee').value||0);
-  s.fromYear=Math.min(2100,Math.max(1975,+$('stFrom').value||2005));save();LAB.data=null;replan(true);toast('บันทึกการตั้งค่าแล้ว');
+  s.fromYear=Math.min(2100,Math.max(1975,+$('stFrom').value||2005));save();LAB.D=null;LAB.F=null;LAB.res=null;replan(true);toast('บันทึกการตั้งค่าแล้ว');
 }
 async function wipe(all){
   if(!confirm(all?'ลบทุกอย่างรวมไม้ที่ถือและประวัติเทรด? (ควรสำรองข้อมูลก่อน)':'ลบข้อมูลราคาทั้งหมด? (ไม้ที่ถือและประวัติเทรดยังอยู่)'))return;
   if(all){const ui={theme:S.settings.theme,zoom:S.settings.zoom};await clearAllData();S=freshUser();Object.assign(S.settings,ui);await saveNow()}
   else{await idb('blocks','readwrite',st=>{st.clear()})}
   MKT={dayRows:{},lastImport:null,years:{},lastK:0,firstK:0};await kvPut('mkt',MKT);
-  LIVE=null;LAB.data=null;LAB.res=null;render();toast('ลบแล้ว');
+  LIVE=null;LAB.D=null;LAB.F=null;LAB.res=null;render();toast('ลบแล้ว');
 }
 async function replan(rebuild){
   if(rebuild){busy(true,'คำนวณใหม่');try{await refreshLive()}finally{busy(false)}}
