@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar EOD Analyzer v11</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#070D15; --bg2:#0E1826; --surface:#141F2E; --surface2:#1D2C3D;
+  --border:#3D5270; --border-soft:#31435A;
+  --text:#F7FAFD; --muted:#CBD9E8; --faint:#B3C4D6;
+  --solar:#F5B841; --load:#4FC3E8; --buy:#FF6B6B; --sell:#46D08A; --battery:#A98BF5; --loss:#8A9BB0;
+  --good:#46D08A; --warn:#F5B841; --bad:#FF6B6B;
+  --chartgrid:rgba(86,114,148,.55);
+  --radius:14px; --radius-sm:10px; --zoom:1; --side-w:232px;
+}
+:root[data-theme="light"]{
+  --bg:#EEF2F6; --bg2:#FFFFFF; --surface:#FFFFFF; --surface2:#F2F5F9;
+  --border:#CBD5E1; --border-soft:#E2E8F0;
+  --text:#132033; --muted:#3F4F66; --faint:#64748B;
+  --solar:#B97D00; --load:#0E7FA8; --buy:#D23B3B; --sell:#138A55; --battery:#6446CC; --loss:#64748B;
+  --good:#138A55; --warn:#A66A00; --bad:#D23B3B; --chartgrid:rgba(71,85,105,.18);
+}
+html.hc:not([data-theme="light"]){--bg:#03070C;--bg2:#0A121D;--surface:#0F1926;--surface2:#182636;--border:#546E90;--text:#fff;--muted:#E4EDF6;--faint:#D2DFEC}
+html.hc[data-theme="light"]{--text:#000;--muted:#1F2A3A;--faint:#334155;--border:#94A3B8}
+html.hc body{font-weight:600}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'IBM Plex Sans Thai',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:16px;font-weight:500;-webkit-font-smoothing:antialiased;min-height:100vh}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-feature-settings:"tnum" 1}
+a{color:var(--load)}
+button,.btn{font-family:inherit;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:8px 14px;border-radius:var(--radius-sm);font-size:14.5px;font-weight:500;display:inline-flex;align-items:center;gap:7px}
+button:hover,.btn:hover{background:var(--surface2)}
+button:focus-visible{outline:2px solid var(--solar);outline-offset:2px}
+.btn.primary{background:linear-gradient(180deg,#F5C25A,#E0A233);color:#231703;border-color:#E0A233;font-weight:600}
+.btn.ghost{background:transparent}
+.btn.tiny{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--bad)}
+
+.app{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bg2);border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:12px}
+.brand{display:flex;gap:10px;align-items:center;padding:2px 6px}
+.brandmark{width:34px;height:34px;border-radius:10px;flex:0 0 auto;background:radial-gradient(circle at 50% 42%,var(--solar),#C88A1E 70%);box-shadow:0 0 18px rgba(245,184,65,.35)}
+.bname{font-weight:700;font-size:15px;line-height:1.2}
+.bver{font-size:12px;color:var(--faint)}
+.systag{font-size:12px;color:var(--muted);padding:0 8px;line-height:1.45}
+#tabbar{display:flex;flex-direction:column;gap:3px}
+#tabbar .tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid transparent;background:transparent;color:var(--muted);padding:10px 12px;font-size:15px}
+#tabbar .tab .ico{width:20px;text-align:center;color:var(--faint)}
+#tabbar .tab:hover:not(:disabled){background:var(--surface2);color:var(--text)}
+#tabbar .tab.active{background:var(--surface);color:var(--text);border-color:var(--border);box-shadow:inset 3px 0 0 var(--solar)}
+#tabbar .tab.active .ico{color:var(--solar)}
+#tabbar .tab:disabled{opacity:.4;cursor:not-allowed}
+.side-foot{margin-top:auto;border-top:1px solid var(--border-soft);padding-top:12px}
+.seg{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:none;border-radius:0;background:transparent;color:var(--muted);padding:7px 4px;font-size:13px;justify-content:center}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button.on{background:var(--surface2);color:var(--text);font-weight:600}
+.side-tools{display:flex;gap:6px;margin-top:10px}
+.side-tools button{flex:1;justify-content:center;padding:7px 0}
+.privacy-note{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.4}
+
+.main{min-width:0;padding:20px 28px 40px;zoom:var(--zoom)}
+.topbar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border-soft)}
+.topbar h2{margin:0;font-size:24px;font-weight:700}
+.topbar-right{margin-left:auto;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.page{max-width:1360px}
+
+.toastbox .toast{font-size:14px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;border:1px solid var(--border);background:var(--surface)}
+.toast.ok{border-color:rgba(70,208,138,.45)} .toast.err{border-color:rgba(255,107,107,.55)} .toast.warn{border-color:rgba(245,184,65,.5)}
+
+.drop{border:1.5px dashed var(--border);border-radius:var(--radius);padding:38px 22px;text-align:center;background:var(--surface);margin-bottom:24px}
+.drop.over{border-color:var(--solar)}
+.drop h3{margin:6px 0 4px;font-size:19px}
+.drop p{margin:0 0 12px;color:var(--muted);font-size:14.5px}
+
+.section-title{font-size:16.5px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.section-title .bar{width:3px;height:15px;background:var(--solar);border-radius:2px}
+.section-title .rm{font-weight:500;font-size:13px;color:var(--faint)}
+.page > .section-title:first-child{margin-top:4px}
+
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 15px;min-width:0}
+.k-label{font-size:13px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+.k-val{font-size:26px;font-weight:700;margin-top:5px;line-height:1.1}
+.k-val small{font-size:13.5px;color:var(--muted);font-weight:600}
+.k-sub{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:4px;overflow-wrap:anywhere}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.d-solar{background:var(--solar)} .d-load{background:var(--load)} .d-buy{background:var(--buy)} .d-batt{background:var(--battery)} .d-save{background:var(--good)} .d-loss{background:var(--loss)}
+
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.twocol>*{min-width:0}
+.bigcard{border-radius:var(--radius);padding:18px 20px;background:var(--surface);border:1px solid var(--border)}
+.bigcard.bill{border-color:rgba(255,107,107,.4)} .bigcard.roi{border-color:rgba(70,208,138,.4)}
+.bigcard .cap{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.bigcard .big{font-size:36px;font-weight:700;line-height:1.05}
+.bigcard.bill .big{color:var(--bad)} .bigcard.roi .big{color:var(--good)}
+.bigcard .big .cur{font-size:17px;color:var(--muted);font-weight:500}
+.split{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px}
+.split div span{display:block;font-size:12px;color:var(--faint);font-weight:600}
+.split div b{font-size:16.5px;font-weight:700}
+.meta{font-size:13px;color:var(--muted);margin-top:10px}
+.progress{height:8px;background:var(--bg2);border-radius:6px;overflow:hidden;margin-top:12px;border:1px solid var(--border)}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,#46D08A,#7EE8B0)}
+
+.insights{display:flex;flex-direction:column;gap:9px}
+.ins{display:flex;gap:11px;padding:11px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);font-size:14.5px;line-height:1.65}
+.ins .ic{flex:0 0 auto;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:13px;margin-top:1px;background:var(--surface2)}
+.ins.warn{border-color:rgba(245,184,65,.45)} .ins.warn .ic{color:var(--warn)}
+.ins.bad{border-color:rgba(255,107,107,.5)} .ins.bad .ic{color:var(--bad)}
+.ins.good{border-color:rgba(70,208,138,.42)} .ins.good .ic{color:var(--good)}
+.ins.info .ic{color:var(--load)}
+
+.chartcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 10px;margin-bottom:16px}
+.chartcard h3{margin:0 0 2px;font-size:16px}
+.csub{font-size:13px;color:var(--muted);margin:0 0 10px}
+.chart-h{position:relative;height:320px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:2px 2px 10px;font-weight:600}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:760px}
+th,td{padding:9px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border-soft)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{background:var(--bg2);font-weight:700;font-size:12.5px}
+tbody tr{background:var(--surface)}
+tbody tr.click{cursor:pointer} tbody tr.click:hover{background:var(--surface2)}
+tbody tr.sel{box-shadow:inset 3px 0 0 var(--solar)}
+tr.dim td{opacity:.7}
+table.compact{min-width:0}
+.tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid var(--border);display:inline-block}
+.tag.ok{color:var(--good);border-color:rgba(70,208,138,.5)} .tag.warn{color:var(--warn);border-color:rgba(245,184,65,.5)} .tag.bad{color:var(--bad);border-color:rgba(255,107,107,.55)} .tag.info{color:var(--load);border-color:rgba(79,195,232,.5)}
+.pos{color:var(--bad)} .neg{color:var(--good)}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;min-width:0}
+.panel > .ph{font-size:14.5px;font-weight:700;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12.5px;color:var(--muted);font-weight:600}
+.field input,.field select,.field textarea{font-family:'IBM Plex Mono',monospace;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14.5px;width:100%}
+:root:not([data-theme="light"]) input,:root:not([data-theme="light"]) select{color-scheme:dark}
+.field .hint{font-size:11.5px;color:var(--faint)}
+.w-xs{width:92px} .w-sm{width:120px} .w-md{width:160px} .w-lg{width:220px}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.settings-grid .span2{grid-column:1/-1}
+.era-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px;background:var(--surface2)}
+.tier-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px;max-width:460px}
+.tier-row input,.ft-row input,.ps-row input{font-family:'IBM Plex Mono',monospace;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:14px;width:100%}
+.ft-row{display:grid;grid-template-columns:130px 120px 1fr auto;gap:8px;align-items:center;margin-bottom:6px;max-width:560px}
+.xbtn{background:transparent;border:1px solid var(--border);color:var(--faint);border-radius:8px;padding:5px 9px}
+.xbtn:hover{color:var(--bad);border-color:var(--bad)}
+
+details.coll{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);margin-bottom:12px}
+details.coll>summary{cursor:pointer;padding:12px 16px;font-size:14.5px;font-weight:700;list-style:none;display:flex;align-items:center;gap:9px}
+details.coll>summary::-webkit-details-marker{display:none}
+details.coll>summary::before{content:"▸";color:var(--solar);font-size:12px}
+details.coll[open]>summary::before{content:"▾"}
+details.coll>summary .cnt{margin-left:auto;font-weight:500;font-size:12px;color:var(--faint)}
+details.coll .cbody{padding:0 14px 14px}
+.calc-step{font-family:'IBM Plex Mono',monospace;font-size:13.5px;line-height:1.7;padding:6px 0;border-bottom:1px solid var(--border-soft);overflow-wrap:anywhere}
+.mixbar{display:flex;height:18px;border-radius:5px;overflow:hidden;background:var(--bg2);min-width:110px}
+.mixbar i{display:block;height:100%}
+.band-bar{height:14px;border-radius:5px;background:var(--bg2);overflow:hidden;flex:1}
+.band-bar i{display:block;height:100%}
+.logbox{max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;background:var(--bg2);font-size:12.5px}
+.logline{padding:5px 0;border-bottom:1px dashed var(--border-soft)}
+
+.report{background:#fff;color:#111;border:1px solid var(--border);border-radius:12px;padding:26px 30px;max-width:960px}
+.report h1{font-size:21px;margin:0 0 2px}
+.report .rsub{color:#555;font-size:13px}
+.report .rsec{font-weight:700;font-size:15px;margin:18px 0 8px;border-left:3px solid #E0A233;padding-left:8px}
+.report .rgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.report .rbox{border:1px solid #ddd;border-radius:8px;padding:9px 11px}
+.report .rbox .l{font-size:11.5px;color:#666} .report .rbox .v{font-size:18px;font-weight:700;font-family:'IBM Plex Mono',monospace} .report .rbox .s{font-size:11px;color:#777}
+.report table{min-width:0;font-size:12.5px}
+.report th,.report td{color:#111!important;background:#fff!important;position:static!important;padding:5px 7px;border-bottom:1px solid #e5e5e5}
+.report .note{font-size:11.5px;color:#666;margin-top:6px}
+
+@media(max-width:1100px){.settings-grid{grid-template-columns:1fr}}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px 16px}
+  #tabbar{flex-direction:row;flex-wrap:wrap;width:100%}
+  #tabbar .tab{width:auto;padding:8px 10px;font-size:14px}
+  .side-foot{margin-top:0;border-top:none;padding-top:0;width:100%}
+  .main{padding:16px}
+}
+@media(max-width:700px){
+  .twocol{grid-template-columns:minmax(0,1fr)}
+  .topbar-right{margin-left:0;width:100%} .topbar-right .field{flex:1 1 100%}
+  .bigcard .big{font-size:30px}
+  .report{padding:16px 14px} .report .rgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ft-row{grid-template-columns:1fr 1fr}
+}
+@media print{
+  @page{size:A4;margin:11mm}
+  html,body{background:#fff!important}
+  .side,.topbar,.toastbox,.noprint,.page:not(#pg-report){display:none!important}
+  .app{display:block} .main{padding:0;zoom:1} .report{border:none;padding:0;max-width:none}
+  .report tr,.report .rbox{break-inside:avoid}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="brandmark" aria-hidden="true"></div>
+      <div><div class="bname">Solar EOD Analyzer</div><div class="bver mono" id="verTag"></div></div></div>
+    <div class="systag" id="sysTag"></div>
+    <nav id="tabbar">
+      <button class="tab active" data-p="home"><span class="ico">◉</span>ภาพรวม</button>
+      <button class="tab" data-p="energy"><span class="ico">☀</span>พลังงาน</button>
+      <button class="tab" data-p="money"><span class="ico">฿</span>บิลและความคุ้มค่า</button>
+      <button class="tab" data-p="system"><span class="ico">▣</span>แบต · EV · ไฟฟ้า</button>
+      <button class="tab" data-p="settings"><span class="ico">⚙</span>ตั้งค่าและข้อมูล</button>
+    </nav>
+    <div class="side-foot">
+      <div class="seg" id="themeSeg"><button data-theme-set="auto">ตามระบบ</button><button data-theme-set="light">สว่าง</button><button data-theme-set="dark">มืด</button></div>
+      <div class="side-tools">
+        <button class="btn ghost" id="fsDown" title="ตัวอักษรเล็กลง">A−</button>
+        <button class="btn ghost" id="fsUp" title="ตัวอักษรใหญ่ขึ้น">A+</button>
+        <button class="btn ghost" id="hcBtn" title="โหมดคมชัดสูง">◐</button>
+      </div>
+      <div class="privacy-note">ประมวลผลในเบราว์เซอร์ทั้งหมด ข้อมูลไม่ถูกอัปโหลด</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div><h2 id="pageTitle">ภาพรวม</h2><div class="k-sub" id="pageSub"></div></div>
+      <div class="topbar-right">
+        <div class="field" id="cycleWrap"><label for="cycleSel">รอบบิล</label><select id="cycleSel" class="w-lg"></select></div>
+        <button class="btn" id="btnAdd">นำเข้าไฟล์</button>
+        <button class="btn primary" id="btnExport">บันทึก backup</button>
+      </div>
+    </div>
+    <div class="toastbox" id="toast"></div>
+    <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv,.json" hidden>
+
+    <!-- ============ HOME ============ -->
+    <section class="page" id="pg-home">
+      <div class="drop" id="drop">
+        <div class="brandmark" style="margin:0 auto 8px;width:44px;height:44px;border-radius:50%"></div>
+        <h3>ลากไฟล์มาวาง หรือกดเลือก</h3>
+        <p>Excel ราย 5 นาทีจาก Deye (PlantsDetails-History) หรือไฟล์ backup JSON (รับไฟล์จาก v10 ได้)</p>
+        <button class="btn primary" id="btnDropPick">เลือกไฟล์</button>
+      </div>
+      <div id="homeContent">
+        <div class="grid kpis" id="kpis"></div>
+        <div class="twocol">
+          <div class="bigcard bill" id="billCard"></div>
+          <div class="bigcard roi" id="roiCard"></div>
+        </div>
+        <div class="section-title"><span class="bar"></span>สิ่งที่ควรรู้ในรอบนี้</div>
+        <div class="insights" id="insights"></div>
+        <div class="section-title"><span class="bar"></span>รายวันในรอบบิล <span class="rm">แท่ง = kWh/วัน · เส้นแดง = ซื้อกริด · เส้นม่วง = SOC สูงสุด</span>
+          <button class="btn tiny noprint" id="btnReport" style="margin-left:auto">รายงานรอบนี้ (พิมพ์/PDF)</button></div>
+        <div class="chartcard"><div class="chart-h"><canvas id="trendChart"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ============ ENERGY ============ -->
+    <section class="page" id="pg-energy" hidden>
+      <div class="section-title"><span class="bar"></span>ภาพรวมรอบบิล <span class="rm">เฉพาะวันที่ข้อมูลครบ ≥90%</span></div>
+      <div class="grid kpis" id="facts"></div>
+      <div class="insights" id="factNotes"></div>
+
+      <div class="section-title"><span class="bar"></span>กราฟรายวัน <span class="rm" id="dayLabel"></span></div>
+      <div class="chartcard">
+        <div class="legend"><span><i class="dot d-solar"></i>โซลาร์ตรง</span><span><i class="dot d-batt"></i>แบต</span><span><i class="dot d-buy"></i>กริด</span>
+          <span style="color:var(--solar)">— ผลิต</span><span style="color:var(--faint)">- - ศักยภาพแดด</span><span style="color:var(--battery)">··· SOC</span></div>
+        <div class="chart-h"><canvas id="dayChart"></canvas></div>
+        <div class="insights" id="dayNotes" style="margin:10px 0 6px"></div>
+      </div>
+
+      <div class="section-title"><span class="bar"></span>ตารางรายวัน <span class="rm">คลิกแถวเพื่อดูกราฟ</span></div>
+      <div class="tablewrap"><table><thead><tr>
+        <th>วันที่</th><th>ผลิต</th><th>ใช้</th><th>ซื้อกริด</th><th>ไฟที่ถูกหรี่</th><th>พึ่งตัวเอง</th><th>SOC ต่ำ–สูง</th><th>พีคโหลด</th><th>ข้อมูล</th>
+      </tr></thead><tbody id="dayBody"></tbody></table></div>
+
+      <div class="section-title"><span class="bar"></span>โปรไฟล์เฉลี่ย 24 ชั่วโมง — ไฟมาจากไหน <span class="rm" id="mixNote"></span></div>
+      <div class="chartcard">
+        <div class="legend"><span><i class="dot d-solar"></i>โซลาร์ตรง</span><span><i class="dot d-batt"></i>แบต</span><span><i class="dot d-buy"></i>กริด</span></div>
+        <div class="chart-h"><canvas id="mixChart"></canvas></div>
+      </div>
+      <div class="grid kpis" id="mixKpis"></div>
+      <details class="coll"><summary>ตารางรายชั่วโมง — ต่ำสุด / เฉลี่ย / สูงสุด<span class="cnt">ค่าเฉลี่ยรายชั่วโมงของแต่ละวัน</span></summary>
+        <div class="cbody"><div class="tablewrap"><table class="compact"><thead><tr><th>ชั่วโมง</th><th>เฉลี่ย kW</th><th>ต่ำสุด</th><th>สูงสุด</th><th>p10–p90</th><th style="text-align:left">สัดส่วน โซลาร์/แบต/กริด</th></tr></thead><tbody id="hourBody"></tbody></table></div></div></details>
+      <details class="coll"><summary>20 ช่วงเวลาที่ดึงกริดสูงสุด<span class="cnt">ค่าราย 5 นาที</span></summary>
+        <div class="cbody"><div class="tablewrap"><table class="compact"><thead><tr><th>เวลา</th><th>กริด kW</th><th>A</th><th>โหลด kW</th><th>โซลาร์</th><th>แบต</th><th>SOC</th></tr></thead><tbody id="topImpBody"></tbody></table></div>
+        <div class="k-sub" id="topImpNote"></div></div></details>
+    </section>
+
+    <!-- ============ MONEY ============ -->
+    <section class="page" id="pg-money" hidden>
+      <div class="section-title"><span class="bar"></span>สมุดรอบบิล — บิลจริง PEA เทียบระบบวัด</div>
+      <div class="grid kpis" id="calKpis"></div>
+      <div class="tablewrap"><table><thead><tr>
+        <th>รอบบิล (อ่านมิเตอร์)</th><th>บิล PEA หน่วย</th><th>ระบบวัด หน่วย</th><th>ต่าง</th><th>ใช้ไฟรวม</th>
+        <th>ค่าไฟจริง ฿</th><th>ถ้าไม่มีโซลาร์ ฿</th><th>ประหยัด ฿</th><th>ข้อมูล</th><th style="text-align:left">สถานะ</th>
+      </tr></thead><tbody id="cycleBody"></tbody></table></div>
+      <div class="k-sub" id="cycleNote"></div>
+
+      <div class="section-title"><span class="bar"></span>บันทึกบิล PEA <span class="rm">กรอกจากบิล 4 ช่อง แอปตรวจกับสูตรค่าไฟให้</span></div>
+      <div class="panel">
+        <div class="row">
+          <input type="hidden" id="bEditId">
+          <div class="field w-md"><label for="bDate">วันที่อ่านหน่วย</label><input type="date" id="bDate"></div>
+          <div class="field w-sm"><label for="bUnits">หน่วยที่ใช้ (kWh)</label><input type="number" step="0.01" id="bUnits"></div>
+          <div class="field w-sm"><label for="bTotal">ยอดรวม (฿)</label><input type="number" step="0.01" id="bTotal"></div>
+          <div class="field w-sm"><label for="bFt">Ft (฿/หน่วย)</label><input type="number" step="0.0001" id="bFt" placeholder="0.1623"></div>
+          <div class="field" style="flex:1;min-width:180px"><label for="bNote">หมายเหตุ</label><input type="text" id="bNote" placeholder="เช่น เปลี่ยนมิเตอร์ 8 พ.ค."></div>
+          <button class="btn primary" id="bSave">บันทึกบิล</button>
+          <button class="btn ghost" id="bClear">ล้าง</button>
+        </div>
+        <div class="k-sub" id="bCheck" style="margin-top:8px"></div>
+        <div class="tablewrap" style="margin-top:12px"><table class="compact"><thead><tr><th>เดือนบิล</th><th>อ่านหน่วย</th><th>หน่วย</th><th>ยอดรวม ฿</th><th>Ft</th><th>ตรวจสูตร</th><th style="text-align:left">หมายเหตุ</th><th></th></tr></thead><tbody id="billBody"></tbody></table></div>
+      </div>
+
+      <details class="coll" open><summary>ความคุ้มค่า (ROI) — วิธีคิดและความอ่อนไหว<span class="cnt" id="roiCnt"></span></summary>
+        <div class="cbody" id="roiDetail"></div></details>
+
+      <details class="coll"><summary>ประวัติก่อนติดโซลาร์ (จากบิล)<span class="cnt" id="preCnt"></span></summary>
+        <div class="cbody">
+          <div class="k-sub" style="margin-bottom:8px">ใช้เทียบการใช้ไฟก่อน–หลัง และถ้ากรอกครบ 12 เดือนแอปจะใช้ปรับฤดูกาลให้ค่าประหยัดต่อปี (บิลแต่ละใบมีประวัติ 6 เดือนย้อนหลังอยู่มุมขวา)</div>
+          <div id="preList"></div>
+          <div class="row" style="margin-top:8px"><div class="field w-md"><label for="pDate">วันที่อ่านหน่วย</label><input type="date" id="pDate"></div>
+            <div class="field w-sm"><label for="pUnits">หน่วย</label><input type="number" id="pUnits"></div><button class="btn" id="pAdd">เพิ่ม</button></div>
+        </div></details>
+
+      <details class="coll"><summary>อัตรา TOU คุ้มไหม<span class="cnt">จากหน่วยที่ซื้อจริงราย 5 นาที</span></summary>
+        <div class="cbody">
+          <div class="row" style="margin-bottom:10px">
+            <div class="field w-sm"><label for="t_peak">Peak ฿/หน่วย</label><input type="number" step="0.0001" id="t_peak" data-cfg="tou.peakRate"></div>
+            <div class="field w-sm"><label for="t_off">Off-Peak ฿/หน่วย</label><input type="number" step="0.0001" id="t_off" data-cfg="tou.offRate"></div>
+            <div class="field w-sm"><label for="t_svc">ค่าบริการ ฿</label><input type="number" step="0.01" id="t_svc" data-cfg="tou.service"></div>
+            <div class="field w-sm"><label for="t_meter">ค่าเปลี่ยนมิเตอร์ ฿</label><input type="number" id="t_meter" data-cfg="tou.meterCost"></div>
+          </div>
+          <div class="tablewrap"><table class="compact"><thead><tr><th>รอบบิล</th><th>ซื้อกริด</th><th>Peak</th><th>Off-Peak</th><th>อัตราปกติ ฿</th><th>TOU ฿</th><th>ต่าง ฿</th></tr></thead><tbody id="touBody"></tbody></table></div>
+          <div class="insights" id="touNotes"></div>
+        </div></details>
+    </section>
+
+    <!-- ============ SYSTEM ============ -->
+    <section class="page" id="pg-system" hidden>
+      <div class="section-title"><span class="bar"></span>แบตเตอรี่ <span class="rm" id="battSub"></span></div>
+      <div class="grid kpis" id="battKpis"></div>
+      <div class="insights" id="battNotes"></div>
+
+      <div class="section-title"><span class="bar"></span>ไฟที่ถูกหรี่ทิ้ง (Curtailment) <span class="rm">ระบบ Zero Export: แบตเต็มแล้วอินเวอร์เตอร์หรี่ PV ให้เท่าโหลด</span></div>
+      <div class="grid kpis" id="curtKpis"></div>
+      <div class="insights" id="curtNotes"></div>
+
+      <div class="section-title"><span class="bar"></span>EV ชาร์จจากไฟส่วนเกิน และแบตลูกที่ 2</div>
+      <div class="panel">
+        <div class="row">
+          <div class="field w-sm"><label for="ev_km">เป้า กม./สัปดาห์</label><input type="number" id="ev_km" data-cfg="ev.targetKmWeek"></div>
+          <div class="field w-sm"><label for="ev_eff">kWh/100 กม.</label><input type="number" step="0.1" id="ev_eff" data-cfg="ev.kwhPer100"></div>
+          <div class="field w-sm"><label for="ev_kw">กำลังชาร์จ kW</label><input type="number" step="0.1" id="ev_kw" data-cfg="ev.chargerKW"></div>
+          <div class="field w-sm"><label for="b2_price">แบตเพิ่ม ฿/kWh</label><input type="number" id="b2_price" data-cfg="batt2.pricePerKWh"></div>
+          <div class="field w-sm"><label for="b2_rt">ประสิทธิภาพไป-กลับ</label><input type="number" step="0.01" id="b2_rt" data-cfg="batt2.rtEff"></div>
+        </div>
+        <div class="k-sub" style="margin:10px 0 6px">ตารางชาร์จรถ (เว้นว่าง = ไม่ชาร์จวันนั้น)</div>
+        <div class="row" id="schedEditor"></div>
+      </div>
+      <div class="grid kpis" id="evKpis"></div>
+      <div class="tablewrap"><table class="compact"><thead><tr><th>แบตเพิ่ม</th><th>ราคา ฿</th><th>EV ได้จากแดด kWh/สัปดาห์</th><th>ครอบคลุมเป้า</th><th>ยังซื้อกริด kWh/สัปดาห์</th><th>ประหยัด ฿/ปี</th><th>คืนทุน</th></tr></thead><tbody id="b2Body"></tbody></table></div>
+      <div class="insights" id="evNotes"></div>
+
+      <details class="coll"><summary>สำรองไฟดับ — ต้องเหลือแบตกี่ %<span class="cnt">จากโหลดจริงช่วงกลางคืน</span></summary>
+        <div class="cbody">
+          <div class="row" style="margin-bottom:10px">
+            <div class="field w-xs"><label for="bk_hours">อยู่ได้ (ชม.)</label><input type="number" step="0.5" id="bk_hours" data-cfg="backup.hours"></div>
+            <div class="field w-sm"><label for="bk_from">ช่วงที่ห่วง ตั้งแต่</label><input type="time" id="bk_from" data-cfg="backup.from" data-type="str"></div>
+            <div class="field w-sm"><label for="bk_to">ถึง</label><input type="time" id="bk_to" data-cfg="backup.to" data-type="str"></div>
+            <div class="field w-xs"><label for="bk_floor">SOC ตัด %</label><input type="number" id="bk_floor" data-cfg="backup.floor"></div>
+            <div class="field w-xs"><label for="bk_margin">เผื่อ %</label><input type="number" id="bk_margin" data-cfg="backup.margin"></div>
+          </div>
+          <div class="grid kpis" id="bkKpis"></div>
+          <div class="insights" id="bkNotes"></div>
+        </div></details>
+
+      <details class="coll"><summary>ความปลอดภัยไฟฟ้า — กระแสเมน สายเมน แรงดันตก<span class="cnt">ประเมินจากกระแส ไม่ทดแทนการตรวจโดยช่าง</span></summary>
+        <div class="cbody">
+          <div class="row" style="margin-bottom:10px">
+            <div class="field w-xs"><label for="e_In">เบรกเกอร์ A</label><input type="number" id="e_In" data-cfg="elec.In"></div>
+            <div class="field w-sm"><label for="e_size">สายเมน ตร.มม.</label><select id="e_size" data-cfg="elec.size"><option>10</option><option>16</option><option>25</option><option>35</option><option>50</option></select></div>
+            <div class="field w-md"><label for="e_method">วิธีเดินสาย</label><select id="e_method" data-cfg="elec.method" data-type="str"><option value="conduit_air">ในท่อ เดินในอากาศ</option><option value="free_air">เดินลอยในอากาศ</option></select></div>
+            <div class="field w-sm"><label for="e_temp">อุณหภูมิรอบสาย °C</label><select id="e_temp" data-cfg="elec.temp"><option>30</option><option>35</option><option>40</option><option>45</option><option>50</option><option>55</option></select></div>
+            <div class="field w-xs"><label for="e_len">ยาว ม.</label><input type="number" id="e_len" data-cfg="elec.len"></div>
+            <div class="field w-xs"><label for="e_evA">EV A</label><input type="number" id="e_evA" data-cfg="elec.evA"></div>
+          </div>
+          <div class="grid kpis" id="elecKpis"></div>
+          <div id="elecCalc"></div>
+          <div class="section-title" style="margin-top:14px;font-size:14.5px">เวลาสะสมในแต่ละช่วงกระแส</div>
+          <div id="elecBands"></div>
+          <div class="insights" id="elecNotes"></div>
+        </div></details>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="page" id="pg-settings" hidden>
+      <div class="settings-grid">
+        <div class="panel"><div class="ph">ไฟล์ข้อมูล</div>
+          <div class="row">
+            <button class="btn" id="btnAdd2">นำเข้า Excel / JSON</button>
+            <button class="btn primary" id="btnExport2">บันทึก backup (JSON ครบ)</button>
+            <button class="btn" id="btnXlsx">ส่งออก Excel</button>
+            <button class="btn danger" id="btnReset">ล้างข้อมูลทั้งหมด</button>
+          </div>
+          <div class="k-sub" id="coverage" style="margin-top:10px"></div>
+          <div class="k-sub" id="persistNote"></div>
+        </div>
+        <div class="panel"><div class="ph">ระบบของบ้าน</div>
+          <div class="row">
+            <div class="field w-sm"><label for="s_pvBefore">แผงเดิม kWp</label><input type="number" step="0.01" id="s_pvBefore" data-cfg="pvBefore" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_pvAfter">แผงปัจจุบัน kWp</label><input type="number" step="0.01" id="s_pvAfter" data-cfg="pvAfter" data-rc="1"></div>
+            <div class="field w-md"><label for="s_pvChange">วันที่เพิ่มแผง</label><input type="date" id="s_pvChange" data-cfg="pvChangeDate" data-type="str" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_inv">อินเวอร์เตอร์ AC kW</label><input type="number" step="0.1" id="s_inv" data-cfg="invAC" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_pvdc">PV เข้าได้สูงสุด kW</label><input type="number" step="0.1" id="s_pvdc" data-cfg="pvMaxDC" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_batt">แบต kWh (nominal)</label><input type="number" step="0.001" id="s_batt" data-cfg="battKWh" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_socFull">SOC ถือว่าเต็ม %</label><input type="number" id="s_socFull" data-cfg="socFull" data-rc="1"></div>
+            <div class="field w-md"><label for="s_netm">มิเตอร์หมุนย้อนถึงวันที่</label><input type="date" id="s_netm" data-cfg="netMeterUntil" data-type="str" data-rc="1"></div>
+          </div>
+          <div class="k-sub" style="margin-top:8px">ค่าเริ่มต้นจาก datasheet: Deye SUN-6K-SG04LP1-EU-SM2 (AC 6 kW, PV input สูงสุด 9.6 kW) · Dyness PowerBrick Pro 51.2 V 280 Ah = 14.336 kWh · มิเตอร์เปลี่ยน 8 พ.ค. 2569 ตามบิล</div>
+        </div>
+        <div class="panel"><div class="ph">รอบบิลและค่าไฟ</div>
+          <div class="row">
+            <div class="field w-sm"><label for="s_readTime">เวลาอ่านมิเตอร์โดยประมาณ</label><input type="time" id="s_readTime" data-cfg="billReadTime" data-type="str" data-rc="1"></div>
+            <div class="field w-sm"><label for="s_readDay">วันอ่านมิเตอร์ (รอบที่ยังไม่มีบิล)</label><input type="number" min="1" max="28" id="s_readDay" data-cfg="readDay" data-rc="1"></div>
+            <div class="field w-xs"><label for="s_vat">VAT %</label><input type="number" id="s_vat" data-cfg="vat" data-rc="1"></div>
+          </div>
+          <div class="ph" style="margin-top:14px">อัตราค่าไฟ PEA 1.1.2 แยกยุคตามเดือนบิล</div>
+          <div id="tariffEditor"></div>
+          <div class="ph" style="margin-top:14px">ค่า Ft แยกยุคตามเดือนบิล</div>
+          <div id="ftEditor"></div>
+        </div>
+        <div class="panel"><div class="ph">สมมติฐานความคุ้มค่า</div>
+          <div class="row">
+            <div class="field w-md"><label for="s_inv0">เงินลงทุนรวม ฿</label><input type="number" id="s_inv0" data-cfg="investment"></div>
+            <div class="field w-md"><label for="s_install">วันเริ่มใช้งาน</label><input type="date" id="s_install" data-cfg="installDate" data-type="str"></div>
+            <div class="field w-xs"><label for="s_horizon">คิดกี่ปี</label><input type="number" id="s_horizon" data-cfg="horizon"></div>
+            <div class="field w-sm"><label for="s_deg">แผงเสื่อม %/ปี</label><input type="number" step="0.01" id="s_deg" data-cfg="degradation"></div>
+            <div class="field w-sm"><label for="s_esc">ค่าไฟขึ้น %/ปี</label><input type="number" step="0.1" id="s_esc" data-cfg="escalation"></div>
+          </div>
+          <div class="k-sub" style="margin-top:8px">แผง Jinko JKM650-670N-66QL6-BDV: เสื่อม 0.35%/ปี (datasheet) · คิด 10 ปีตามประกันแบตและอินเวอร์เตอร์ ไม่ต้องเผื่อเปลี่ยนแบตในช่วงนี้</div>
+        </div>
+        <div class="panel span2"><div class="ph">คุณภาพข้อมูล</div>
+          <div class="k-sub" id="qualSummary"></div>
+          <div class="tablewrap" style="margin-top:10px"><table class="compact"><thead><tr><th>วันที่</th><th>ข้อมูล</th><th>ช่วงที่ขาด</th><th>เติมด้วยค่าประมาณ (kWh ใช้/ซื้อ)</th><th>สมดุลพลังงาน</th><th style="text-align:left">หมายเหตุ</th><th></th></tr></thead><tbody id="qualBody"></tbody></table></div>
+        </div>
+        <div class="panel span2"><div class="ph">Audit log</div><div class="logbox" id="auditLog"></div></div>
+      </div>
+    </section>
+
+    <!-- ============ REPORT ============ -->
+    <section class="page" id="pg-report" hidden>
+      <div class="row noprint" style="margin-bottom:14px"><button class="btn" id="rptBack">← กลับ</button><button class="btn primary" id="rptPrint">พิมพ์ / บันทึกเป็น PDF</button></div>
+      <div class="report" id="reportDoc"></div>
+    </section>
+    <div class="k-sub noprint" style="margin-top:30px;text-align:center" id="verFoot"></div>
+  </main>
+</div>
+<script>
+"use strict";
+/* ======================================================================
+   Solar EOD Analyzer v11 — เครื่องคำนวณกลางตัวเดียว
+   ข้อมูลดิบ 5 นาที → เติมช่องว่าง → สรุปรายวัน → รอบบิลตามวันอ่านมิเตอร์จริง
+   → ปรับเทียบกับบิล PEA → ความคุ้มค่า · ทุกหน้าอ่านผลจาก M (model) ชุดเดียว
+   ====================================================================== */
+const APP_VERSION='v11.0', APP_DATE='2026-10-05';
+const H=5/60, NS=288;
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const THM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const store={};            // 'YYYY-MM-DD HH:MM' -> {dayKey,min,prod,cons,grid,batt,soc}
+let M=null;                // model cache (สร้างใหม่ทุกครั้งที่ข้อมูล/ค่าตั้งเปลี่ยน)
+
+/* บิล PEA ที่ผู้ใช้ส่งมา (ตรวจกับสูตรแล้วตรงทุกบรรทัด) — ใส่เป็นข้อมูลตั้งต้น ไม่มีชื่อ/ที่อยู่/เลขผู้ใช้ไฟ */
+const SEED_BILLS=[
+  {id:'seed_2604',billMonth:'2026-04',meterDate:'2026-04-21',prevMeterDate:'2026-03-22',units:40,total:169.54,ftRate:0.0972,source:'seed',notes:''},
+  {id:'seed_2605',billMonth:'2026-05',meterDate:'2026-05-22',prevMeterDate:'2026-04-21',units:78,total:311.01,ftRate:0.1623,source:'seed',notes:'เปลี่ยนมิเตอร์ 8 พ.ค. 2569: เครื่องเก่า 31 + เครื่องใหม่ 47 หน่วย'},
+  {id:'seed_2606',billMonth:'2026-06',meterDate:'2026-06-21',prevMeterDate:'2026-05-22',units:93,total:365.74,ftRate:0.1623,source:'seed',notes:''}
+];
+const SEED_PRE=[
+  {date:'2025-10-20',units:564},{date:'2025-11-19',units:518},{date:'2025-12-22',units:458},
+  {date:'2026-01-22',units:494},{date:'2026-02-19',units:514},{date:'2026-03-22',units:364,partial:true}
+];
+function defaults(){ return {
+  schema:11, vat:7,
+  tariffEras:[
+    {from:'2000-01-01',label:'อัตราเดิม (ถึง ส.ค. 2569)',tiers:[{upTo:150,rate:3.2484},{upTo:400,rate:4.2218},{upTo:null,rate:4.4217}],service:24.62,verified:true},
+    {from:'2026-09-01',label:'อัตราใหม่ (ก.ย. 2569 เป็นต้นไป)',tiers:[{upTo:200,rate:3.0000},{upTo:400,rate:4.1584},{upTo:null,rate:4.3583}],service:24.62,verified:false}],
+  ftEras:[{from:'2026-01',ft:0.0972,src:'bill'},{from:'2026-05',ft:0.1623,src:'bill'}],
+  billReadTime:'07:30', readDay:21,
+  pvBefore:6.5, pvAfter:9.1, pvChangeDate:'2026-04-16', invAC:6, pvMaxDC:9.6, battKWh:14.336, battDoD:95, socFull:98,
+  netMeterUntil:'2026-05-07',
+  investment:250000, installDate:'', horizon:10, degradation:0.35, escalation:0,
+  billActuals:SEED_BILLS.map(b=>({...b})), preSolar:SEED_PRE.map(p=>({...p})),
+  ev:{kwhPer100:17,targetKmWeek:300,chargerKW:3.5,sched:{"0":["09:00","16:00"],"1":null,"2":null,"3":null,"4":["09:00","16:00"],"5":["12:30","16:00"],"6":["12:30","16:00"]}},
+  batt2:{sizes:[5,7,10,14],pricePerKWh:5000,rtEff:0.90,maxChargeKW:3.0},
+  tou:{peakRate:5.7982,offRate:2.6369,service:24.62,meterCost:3600,peakStart:'09:00',peakEnd:'22:00'},
+  backup:{hours:3,from:'22:00',to:'06:00',floor:8,margin:5},
+  elec:{In:63,size:16,method:'conduit_air',temp:45,kgroup:1,len:10,vFallback:230,evA:32,evWin:'22:00-06:00'},
+  ignoreDays:[], theme:'auto', zoom:1, hc:false, auditLog:[]
+}; }
+let cfg=defaults();
+
+/* ---------------- persistence: window.storage (host) แล้วค่อย IndexedDB ---------------- */
+const IDB={db:null,
+  open(){return new Promise(res=>{ if(IDB.db)return res(IDB.db);
+    try{ const rq=indexedDB.open('solarEOD',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv');
+      rq.onsuccess=()=>{IDB.db=rq.result;res(IDB.db);}; rq.onerror=()=>res(null); }catch(e){res(null);} });},
+  async get(k){ const db=await IDB.open(); if(!db)return null; return new Promise(res=>{ try{ const t=db.transaction('kv','readonly').objectStore('kv').get(k);
+    t.onsuccess=()=>res(t.result==null?null:t.result); t.onerror=()=>res(null);}catch(e){res(null);} });},
+  async set(k,v){ const db=await IDB.open(); if(!db)return false; return new Promise(res=>{ try{ const t=db.transaction('kv','readwrite').objectStore('kv').put(v,k);
+    t.onsuccess=()=>res(true); t.onerror=()=>res(false);}catch(e){res(false);} });}
+};
+let persistMode='—';
+async function saveState(){
+  const cols=JSON.stringify(toColumnar()), c=JSON.stringify(cfg);
+  try{ if(window.storage&&window.storage.set){
+    const a=await window.storage.set('solar4:cols',cols,false), b=await window.storage.set('solar3:cfg',c,false);
+    if(a&&b){ persistMode='host'; return; } } }catch(e){}
+  try{ const a=await IDB.set('cols',cols), b=await IDB.set('cfg',c); persistMode=(a&&b)?'idb':'none'; }catch(e){ persistMode='none'; }
+}
+async function loadState(){
+  try{ if(window.storage&&window.storage.get){
+    let c=null,cc=null; try{ c=await window.storage.get('solar3:cfg',false); }catch(e){} try{ cc=await window.storage.get('solar4:cols',false); }catch(e){}
+    if(c||cc){ if(c&&c.value) mergeCfg(JSON.parse(c.value)); if(cc&&cc.value) fromColumnar(JSON.parse(cc.value)); persistMode='host'; return; } } }catch(e){}
+  try{ const c=await IDB.get('cfg'); if(c) mergeCfg(JSON.parse(c));
+    const cc=await IDB.get('cols'); if(cc) fromColumnar(JSON.parse(cc)); else { const r=await IDB.get('rows'); if(r) Object.assign(store,JSON.parse(r)); }
+    persistMode='idb'; }catch(e){ persistMode='none'; }
+}
+
+/* ---------------- config merge + migration (v10 → v11) ---------------- */
+const NESTED=['ev','tou','batt2','elec','backup'];
+function mergeCfg(src){
+  if(!src||typeof src!=='object') return;
+  if(src.schema===undefined) cfg.schema=0;          // ไฟล์จาก v10 → ต้อง migrate
+  Object.keys(src).forEach(k=>{
+    if(NESTED.includes(k)&&src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){
+      cfg[k]=Object.assign({},cfg[k]||{},src[k]); if(k==='ev'&&src.ev.sched) cfg.ev.sched=Object.assign({},src.ev.sched); }
+    else if(['tariffEras','ftEras','billActuals','preSolar','auditLog'].includes(k)&&(!Array.isArray(src[k])||!src[k].length)){ /* คงของเดิม */ }
+    else cfg[k]=src[k];
+  });
+}
+function logAudit(action,detail){ if(!Array.isArray(cfg.auditLog)) cfg.auditLog=[];
+  cfg.auditLog.unshift({ts:new Date().toISOString(),action,detail}); cfg.auditLog=cfg.auditLog.slice(0,300); }
+function migrateCfg(){
+  const d=defaults(), notes=[];
+  NESTED.forEach(k=>cfg[k]=Object.assign({},d[k],cfg[k]||{}));
+  if(!cfg.ev.sched) cfg.ev.sched=d.ev.sched;
+  ['vat','billReadTime','readDay','pvBefore','pvAfter','pvChangeDate','invAC','pvMaxDC','battKWh','battDoD','socFull','netMeterUntil','investment','horizon','degradation','escalation','theme','zoom']
+    .forEach(k=>{ if(cfg[k]===undefined||cfg[k]===null||cfg[k]==='') cfg[k]=d[k]; });
+  if(!Array.isArray(cfg.tariffEras)||!cfg.tariffEras.length) cfg.tariffEras=d.tariffEras;
+  cfg.tariffEras.forEach(e=>{ if(e.verified===undefined) e.verified=!!(e.tiers&&e.tiers[0]&&+e.tiers[0].rate===3.2484&&+e.service===24.62); });
+  if(!Array.isArray(cfg.ftEras)) cfg.ftEras=[];
+  // Ft จากบิลจริงชนะค่า default เสมอ
+  d.ftEras.forEach(f=>{ const e=cfg.ftEras.find(x=>x.from===f.from); if(!e) cfg.ftEras.push({...f}); else if(e.src!=='bill'){ e.ft=f.ft; e.src='bill'; } });
+  cfg.ftEras=cfg.ftEras.filter(f=>!(f.src==='default'&&f.from==='2000-01'&&cfg.ftEras.some(x=>x.from==='2026-01')));
+  if(!Array.isArray(cfg.billActuals)) cfg.billActuals=[];
+  SEED_BILLS.forEach(b=>{ if(!cfg.billActuals.some(x=>x.billMonth===b.billMonth&&x.units!=null)) cfg.billActuals.push({...b}); });
+  cfg.billActuals=cfg.billActuals.filter(b=>b&&b.meterDate&&b.units!=null&&!b.needsReview);
+  if(!Array.isArray(cfg.preSolar)||!cfg.preSolar.length) cfg.preSolar=d.preSolar;
+  if((cfg.schema||0)<11){
+    if(Array.isArray(cfg.monthly)&&cfg.monthly.length) notes.push(`ลบประวัติรายเดือนแบบกรอกเอง ${cfg.monthly.length} แถว (มีแถวผิด เช่น ปี 1907) — ใช้บิลจริงแทน`);
+    if(cfg.netMeterUntil==='2026-05-31'){ cfg.netMeterUntil='2026-05-07'; notes.push('มิเตอร์หมุนย้อนสิ้นสุด 7 พ.ค. 2569 (บิลระบุเปลี่ยนมิเตอร์ 8 พ.ค.)'); }
+    if(+cfg.horizon!==10){ cfg.horizon=10; notes.push('คิดความคุ้มค่า 10 ปีตามประกันอุปกรณ์'); }
+    if(+cfg.degradation===0.5){ cfg.degradation=0.35; notes.push('แผงเสื่อม 0.35%/ปี ตาม datasheet Jinko'); }
+    if(!cfg.pvMaxDC) cfg.pvMaxDC=9.6; if(!cfg.battKWh) cfg.battKWh=14.336;
+    cfg.schema=11;
+  }
+  ['monthly','tiers','service','ft','rate','svc','early','earlyMode','earlyFixed','sellRate','xbattCost','xbattCap','evKm','mixExFlag','lastOcrBatch','rptMonth','settingsFrom'].forEach(k=>delete cfg[k]);
+  if(cfg.tou) delete cfg.tou.enabled;
+  if(!Array.isArray(cfg.ignoreDays)) cfg.ignoreDays=[];
+  notes.forEach(n=>logAudit('migrate_v11',n));
+  return notes;
+}
+
+/* ---------------- tariff engine (แบบใบแจ้งหนี้ PEA: ปัดทีละบรรทัด) ---------------- */
+function tariffOn(dateKey){
+  const eras=(cfg.tariffEras||[]).slice().sort((a,b)=>a.from<b.from?-1:1);
+  let pick=eras[0]; for(const e of eras){ if(!dateKey||dateKey>=e.from) pick=e; } return pick;
+}
+function ftOn(dateKey){
+  const eras=(cfg.ftEras||[]).filter(e=>e&&e.from).slice().sort((a,b)=>a.from<b.from?-1:1);
+  if(!eras.length) return 0;
+  const mk=(dateKey||todayISO()).slice(0,7);
+  let f=+eras[0].ft; for(const e of eras){ if(mk>=e.from) f=+e.ft; } return f;
+}
+function ftVerified(dateKey){ const mk=(dateKey||todayISO()).slice(0,7);
+  const eras=(cfg.ftEras||[]).slice().sort((a,b)=>a.from<b.from?-1:1); let e0=null; for(const e of eras) if(mk>=e.from) e0=e;
+  // Ft เปลี่ยนทุก 4 เดือน: ถือว่ายืนยันเฉพาะ 4 เดือนนับจากเดือนที่มีบิล
+  if(!e0||e0.src!=='bill') return false; const [y,m]=e0.from.split('-').map(Number), [y2,m2]=mk.split('-').map(Number);
+  return (y2*12+m2)-(y*12+m)<4; }
+const r2=x=>Math.round((+x||0)*100+1e-9)/100;
+function billBreakdown(units,dateKey){
+  units=Math.max(0,+units||0); const era=tariffOn(dateKey); let energy=0,prev=0,topTier=0,ti=0; const lines=[];
+  const tiers=era.tiers.map(t=>({upTo:(t.upTo==null||t.upTo==='')?Infinity:+t.upTo,rate:+t.rate||0})).sort((a,b)=>a.upTo-b.upTo);
+  for(const t of tiers){ ti++; if(units<=prev) break; const take=Math.min(units,t.upTo)-prev;
+    if(take>0){ const amt=r2(take*t.rate); energy+=amt; topTier=ti; lines.push({units:take,rate:t.rate,amt}); } prev=t.upTo; }
+  energy=r2(energy); const service=+era.service||0, ftRate=ftOn(dateKey), ft=r2(ftRate*units);
+  const sub=r2(energy+service+ft), vatAmt=r2(sub*(+cfg.vat||0)/100);
+  return {units,energy,service,ft,ftRate,sub,vatAmt,total:r2(sub+vatAmt),topTier,lines,eraLabel:era.label};
+}
+const billFor=(u,dk)=>billBreakdown(u,dk).total;
+/* อัตราส่วนเพิ่ม (marginal) ต่อหน่วยรวม Ft+VAT ณ ระดับการใช้ต่อรอบ */
+function marginalRate(units,dk){ return billFor(units+1,dk)-billFor(units,dk); }
+
+/* ---------------- helpers: dates ---------------- */
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function addDays(iso,n){ const d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function daysBetween(a,b){ return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000); }
+function monthShift(iso,n,day){ const [y,m]=iso.split('-').map(Number); const t=new Date(Date.UTC(y,m-1+n,1));
+  const dim=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth()+1)}-${pad(Math.min(day,dim))}`; }
+const hm2min=t=>{ const [h,m]=String(t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
+const minToHM=m=>m==null?'—':`${pad(Math.floor(m/60)%24)}:${pad(m%60)}`;
+const thd=iso=>iso?`${+iso.slice(8,10)} ${THM[+iso.slice(5,7)-1]} ${String(+iso.slice(0,4)+543).slice(2)}`:'—';
+const thMonth=mk=>mk?`${mk.slice(5,7)}/${+mk.slice(0,4)+543}`:'—';
+const wdMon0=dk=>{ const [Y,Mo,D]=dk.split('-').map(Number); return (new Date(Date.UTC(Y,Mo-1,D)).getUTCDay()+6)%7; };
+function pvKwpOn(dk){ return (cfg.pvChangeDate&&dk<cfg.pvChangeDate)?(+cfg.pvBefore||6.5):(+cfg.pvAfter||9.1); }
+function isNetMeterDay(dk){ return !!(cfg.netMeterUntil&&dk<=cfg.netMeterUntil); }
+const median=a=>{ if(!a.length) return 0; const v=a.slice().sort((x,y)=>x-y), m=v.length>>1; return v.length%2?v[m]:(v[m-1]+v[m])/2; };
+const quant=(a,p)=>{ if(!a.length) return 0; const v=a.slice().sort((x,y)=>x-y); return v[Math.min(v.length-1,Math.max(0,Math.floor(p*(v.length-1)+0.5)))]; };
+
+/* ---------------- ingest Deye Excel (ราย 5 นาที) ---------------- */
+const num=v=>{ const n=parseFloat(v); return isFinite(n)?n:0; };
+function parseTime(v){
+  let Y,Mo,D,h,mi;
+  if(typeof v==='number'&&isFinite(v)){ const d=new Date(Math.round((v-25569)*86400000)); Y=d.getUTCFullYear();Mo=d.getUTCMonth()+1;D=d.getUTCDate();h=d.getUTCHours();mi=d.getUTCMinutes(); }
+  else if(v instanceof Date){ Y=v.getUTCFullYear();Mo=v.getUTCMonth()+1;D=v.getUTCDate();h=v.getUTCHours();mi=v.getUTCMinutes(); }
+  else if(typeof v==='string'){ const m=v.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T]+(\d{1,2}):(\d{2})/); if(!m) return null; Y=+m[1];Mo=+m[2];D=+m[3];h=+m[4];mi=+m[5]; }
+  else return null;
+  if(Y<2000||Y>2100) return null;
+  const dayKey=`${Y}-${pad(Mo)}-${pad(D)}`; return {key:`${dayKey} ${pad(h)}:${pad(mi)}`,dayKey,min:h*60+mi};
+}
+function mapDetailed(hdr){ const idx={}; hdr.forEach((raw,i)=>{ const c=String(raw||'').toLowerCase().replace(/\s+/g,'');
+  if(c.includes('time')||c.includes('เวลา')) idx.time=i;
+  else if(c.includes('production')) idx.prod=i; else if(c.includes('consumption')) idx.cons=i;
+  else if(c.includes('grid-tied')||c.includes('gridtied')) idx.gti=i; else if(c.startsWith('grid')) idx.grid=i;
+  else if(c.includes('battery')) idx.batt=i; else if(c.includes('soc')) idx.soc=i; }); return idx; }
+async function ingestExcel(files){
+  let added=0,dup=0,ok=0; const bad=[];
+  for(const file of files){
+    try{
+      const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}); let handled=false;
+      const sheets=wb.SheetNames.includes('raw_5min')?['raw_5min']:wb.SheetNames;
+      sheets.forEach(sn=>{
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''}); if(!rows.length) return;
+        let hi=-1; for(let i=0;i<Math.min(rows.length,6);i++){ const j=rows[i].map(x=>String(x).toLowerCase()).join('|'); if(j.includes('time')&&j.includes('production')){hi=i;break;} }
+        if(hi<0) return; const ix=mapDetailed(rows[hi]); if(ix.time===undefined||ix.prod===undefined) return;
+        for(let i=hi+1;i<rows.length;i++){ const r=rows[i]; if(!r||r[ix.time]===''||r[ix.time]==null) continue;
+          const t=parseTime(r[ix.time]); if(!t||t.min%5) continue;
+          const rec={dayKey:t.dayKey,min:t.min,prod:num(r[ix.prod]),cons:ix.cons!==undefined?num(r[ix.cons]):0,
+            grid:ix.grid!==undefined?num(r[ix.grid]):0,batt:ix.batt!==undefined?num(r[ix.batt]):0,soc:ix.soc!==undefined?num(r[ix.soc]):0};
+          if(store[t.key]!==undefined) dup++; else added++; store[t.key]=rec; }
+        handled=true;
+      });
+      if(handled) ok++; else bad.push(file.name);
+    }catch(e){ bad.push(file.name); }
+  }
+  return {added,dup,ok,bad};
+}
+/* columnar (รูปแบบไฟล์ backup เดียวกับ v10) */
+function toColumnar(){
+  const keys=Object.keys(store).sort(), r3=x=>Math.round((+x||0)*1000)/1000;
+  const c={interval_min:5,t:[],prod:[],cons:[],grid:[],batt:[],soc:[]};
+  keys.forEach(k=>{ const r=store[k]; c.t.push(k); c.prod.push(r3(r.prod)); c.cons.push(r3(r.cons)); c.grid.push(r3(r.grid)); c.batt.push(r3(r.batt)); c.soc.push(Math.round(+r.soc||0)); });
+  return c;
+}
+function fromColumnar(c){
+  let add=0,dup=0;
+  (c.t||[]).forEach((k,i)=>{ const m=String(k).match(/^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/); if(!m) return;
+    const min=(+m[2])*60+(+m[3]); if(min%5) return;
+    if(store[k]!==undefined) dup++; else add++;
+    store[k]={dayKey:m[1],min,prod:+c.prod[i]||0,cons:+c.cons[i]||0,grid:+c.grid[i]||0,batt:+c.batt[i]||0,soc:+c.soc[i]||0}; });
+  return {add,dup};
+}
+
+/* ======================================================================
+   MODEL
+   ====================================================================== */
+const F=['prod','cons','imp','exp','chg','dis','soc'];
+function buildModel(){
+  const keys=Object.keys(store).sort();
+  M={days:[],D:{},cycles:[],first:null,last:null,keys};
+  if(!keys.length) return M;
+  M.first=keys[0]; M.last=keys[keys.length-1];
+  const d0=M.first.slice(0,10), d1=M.last.slice(0,10), s0=Math.floor(hm2min(M.first.slice(11))/5), s1=Math.floor(hm2min(M.last.slice(11))/5);
+  const dks=[]; for(let d=d0; d<=d1; d=addDays(d,1)) dks.push(d);
+  dks.forEach(dk=>{ const a={dk,has:new Uint8Array(NS),fill:new Uint8Array(NS),lo:dk===d0?s0:0,hi:dk===d1?s1:NS-1}; F.forEach(f=>a[f]=new Float64Array(NS)); M.D[dk]=a; });
+  keys.forEach(k=>{ const r=store[k], a=M.D[r.dayKey]; const s=r.min/5; if(!a||s<0||s>=NS) return;
+    a.has[s]=1; a.prod[s]=r.prod; a.cons[s]=r.cons; a.imp[s]=Math.max(r.grid,0); a.exp[s]=Math.max(-r.grid,0);
+    a.chg[s]=Math.max(-r.batt,0); a.dis[s]=Math.max(r.batt,0); a.soc[s]=r.soc; });
+  // เติมช่องว่าง: ค่ามัธยฐานของช่วงเวลาเดียวกันจากวันใกล้เคียง (±7 วัน ขยายถึง ±21 ถ้าไม่พอ)
+  dks.forEach((dk,i)=>{ const a=M.D[dk];
+    for(let s=a.lo;s<=a.hi;s++){ if(a.has[s]) continue;
+      const pool={}; F.forEach(f=>pool[f]=[]);
+      for(let w=1;w<=21;w++){ for(const j of [i-w,i+w]){ const b=j>=0&&j<dks.length?M.D[dks[j]]:null; if(b&&b.has[s]) F.forEach(f=>pool[f].push(b[f][s])); }
+        if(w>=7&&pool.cons.length>=4) break; }
+      if(pool.cons.length){ F.forEach(f=>a[f][s]=median(pool[f])); a.fill[s]=1; } } });
+  M.days=dks.map(dk=>dayStats(M.D[dk]));
+  buildPotential();
+  buildCycles();
+  return M;
+}
+function dayStats(a){
+  let n=0,nf=0; const t={prod:0,cons:0,imp:0,exp:0,chg:0,dis:0}, mz={prod:0,cons:0,imp:0,exp:0,chg:0,dis:0};
+  let socMin=101,socMax=-1,pk=-1,pkT=null,sunS=null,sunE=null,bal=0,cMax=-1e9,cMin=1e9;
+  for(let s=0;s<NS;s++){
+    if(a.has[s]){ n++; for(const f in mz) mz[f]+=a[f][s]*H;
+      if(a.soc[s]<socMin) socMin=a.soc[s]; if(a.soc[s]>socMax) socMax=a.soc[s];
+      if(a.cons[s]>pk){ pk=a.cons[s]; pkT=s*5; }
+      if(a.prod[s]>0.15){ if(sunS===null) sunS=s*5; sunE=s*5; }
+      bal+=a.prod[s]+a.imp[s]-a.exp[s]+a.dis[s]-a.chg[s]-a.cons[s];
+      if(a.cons[s]>cMax) cMax=a.cons[s]; if(a.cons[s]<cMin) cMin=a.cons[s]; }
+    if(a.has[s]||a.fill[s]){ if(!a.has[s]) nf++; for(const f in t) t[f]+=a[f][s]*H; }
+  }
+  const cov=n/NS, balMean=n?bal/n:0;
+  const flat=n>50&&(cMax-cMin)<0.12;
+  return {dayKey:a.dk,a,n,nf,coverage:cov,full:cov>=0.9,
+    ...t, m:mz, loss:mz.prod+mz.imp-mz.exp+mz.dis-mz.chg-mz.cons,
+    socMin:socMin>100?0:socMin,socMax:socMax<0?0:socMax,peakCons:Math.max(0,pk),peakT:pkT,sunStart:sunS,sunEnd:sunE,
+    balMean,flat,suspect:flat||Math.abs(balMean)>0.6,ignored:(cfg.ignoreDays||[]).includes(a.dk),
+    selfSuff:t.cons>0?Math.max(0,(t.cons-t.imp)/t.cons):0};
+}
+const dayOf=dk=>M&&M.days.find(d=>d.dayKey===dk);
+const goodDays=list=>list.filter(d=>d.full&&!d.suspect&&!d.ignored);
+
+/* ---------- ศักยภาพแดด + ไฟที่ถูกหรี่ (โมเดลเดียว ใช้ทั้งแอป) ----------
+   ช่วง "ถูกจำกัด" = SOC ≥ socFull และแบตรับชาร์จ < 0.3 kW (Zero Export: PV ถูกหรี่ให้เท่าโหลด)
+   โปรไฟล์อ้างอิง = p95 ของการผลิตในช่วงที่ไม่ถูกจำกัด (ยุคแผงปัจจุบัน) ต่อ kWp
+   แต่ละวันปรับสเกลด้วยคุณภาพแดดของวันนั้น (สัดส่วนผลิตจริง/อ้างอิง ในช่วงไม่ถูกจำกัด)
+   ไม่ใช้เพดาน AC 6 kW เพราะข้อมูลจริงผลิตได้ถึง 9.1 kW (PV→แบตทางฝั่ง DC) จึงจำกัดที่ PV input สูงสุดแทน */
+function constrained(a,s){ return a.soc[s]>=(+cfg.socFull||98) && a.chg[s]<0.3; }
+function buildPotential(){
+  const era=M.days.filter(d=>d.full&&!d.ignored&&(!cfg.pvChangeDate||d.dayKey>=cfg.pvChangeDate));
+  const src=era.length>=7?era:M.days.filter(d=>d.full&&!d.ignored);
+  const bucket=Array.from({length:NS},()=>[]);
+  src.forEach(d=>{ const a=d.a, k=pvKwpOn(d.dayKey); for(let s=0;s<NS;s++) if(a.has[s]&&!constrained(a,s)) bucket[s].push(a.prod[s]/k); });
+  const ref=bucket.map(v=>v.length>=8?quant(v,0.95):(v.length?Math.max(...v):0));   // kW ต่อ kWp
+  const cap=+cfg.pvMaxDC||9.6;
+  const qs=[];
+  M.days.forEach(d=>{ const a=d.a, k=pvKwpOn(d.dayKey); let nu=0,de=0;
+    for(let s=0;s<NS;s++) if(a.has[s]&&!constrained(a,s)&&ref[s]*k>0.5){ nu+=a.prod[s]; de+=ref[s]*k; }
+    d.q=de>0?Math.min(1.15,nu/de):null; if(d.q!=null&&d.full) qs.push(d.q); });
+  const qMed=qs.length?median(qs):0.8;
+  M.days.forEach(d=>{ const a=d.a, k=pvKwpOn(d.dayKey), q=d.q!=null?d.q:qMed; a.pot=new Float64Array(NS);
+    let pot=0,curt=0,curtH=0;
+    // คุณภาพแดดเฉพาะที่ ±60 นาทีรอบช่วงที่ถูกจำกัด (เมฆช่วงบ่ายไม่ดึงศักยภาพช่วงเช้าลง) ถ้าข้อมูลไม่พอใช้ค่าของทั้งวัน
+    const qAt=s=>{ let nu=0,de=0,c=0; for(let j=Math.max(0,s-12);j<=Math.min(NS-1,s+12);j++){ if(a.has[j]&&!constrained(a,j)&&ref[j]*k>0.5){ nu+=a.prod[j]; de+=ref[j]*k; c++; } }
+      return c>=4&&de>0?Math.min(1.15,nu/de):q; };
+    for(let s=0;s<NS;s++){ if(!a.has[s]&&!a.fill[s]) continue;
+      let v=a.prod[s];
+      if(a.has[s]&&constrained(a,s)&&ref[s]*k>0.05){ const p=Math.min(ref[s]*k*qAt(s),cap); if(p>v){ curt+=(p-v)*H; curtH+=H; v=p; } }
+      a.pot[s]=v; pot+=v*H; }
+    d.pot=pot; d.curt=curt; d.curtH=curtH; });
+  M.ref=ref; M.qMed=qMed;
+}
+
+/* ---------- รอบบิล: ใช้วันอ่านมิเตอร์จริงจากบิล ที่เหลือคาดจากวันอ่านประจำ ---------- */
+function readDates(){
+  const bills=(cfg.billActuals||[]).filter(b=>b.meterDate).sort((a,b)=>a.meterDate<b.meterDate?-1:1);
+  const set=new Set(bills.map(b=>b.meterDate)); if(bills[0]&&bills[0].prevMeterDate) set.add(bills[0].prevMeterDate);
+  let dates=[...set].sort(); const day=+cfg.readDay||21;
+  const d0=M.first.slice(0,10), d1=M.last.slice(0,10);
+  if(!dates.length) dates=[monthShift(d0,0,day)];
+  while(dates[0]>d0) dates.unshift(monthShift(dates[0],-1,+dates[0].slice(8,10)));
+  while(dates[dates.length-1]<=d1) dates.push(monthShift(dates[dates.length-1],1,day));
+  return dates;
+}
+/* รวมพลังงานในหน้าต่าง [A,Z) ระดับ 5 นาที · หน่วยที่มิเตอร์นับ: ยุคหมุนย้อน = ซื้อ−ขาย (ไม่ติดลบ) */
+function windowSum(A,Z){
+  const sA=hm2min(A.slice(11))/5|0, sZ=hm2min(Z.slice(11))/5|0, dA=A.slice(0,10), dZ=Z.slice(0,10);
+  const o={cons:0,prod:0,imp:0,exp:0,chg:0,dis:0,curt:0,net:0,netExp:0,n:0,nf:0,out:0,slots:0,peak:0,offpeak:0};
+  const t=cfg.tou, ps=hm2min(t.peakStart)/5, pe=hm2min(t.peakEnd)/5;
+  for(let dk=dA; dk<=dZ; dk=addDays(dk,1)){
+    const a=M.D[dk], from=dk===dA?sA:0, to=dk===dZ?sZ:NS, wd=wdMon0(dk), we=wd>=5, nm=isNetMeterDay(dk);
+    for(let s=from;s<to;s++){ o.slots++;
+      if(!a||(!a.has[s]&&!a.fill[s])){ o.out++; continue; }
+      if(a.has[s]) o.n++; else o.nf++;
+      o.cons+=a.cons[s]*H; o.prod+=a.prod[s]*H; o.chg+=a.chg[s]*H; o.dis+=a.dis[s]*H;
+      if(a.pot) o.curt+=(a.pot[s]-a.prod[s])*H;
+      const im=a.imp[s]*H, ex=a.exp[s]*H;
+      if(nm){ o.net+=im; o.netExp+=ex; } else { o.imp+=im; }
+      o.exp+=ex;
+      if(!we&&s>=ps&&s<pe) o.peak+=im; else o.offpeak+=im; } }
+  o.units=Math.max(0,o.net-o.netExp)+o.imp; o.impRaw=o.net+o.imp;
+  o.cov=o.slots?(o.n+o.nf)/o.slots:0; o.measured=o.slots?o.n/o.slots:0;
+  return o;
+}
+function buildCycles(){
+  const rt=/^\d{2}:\d{2}$/.test(cfg.billReadTime||'')?cfg.billReadTime:'07:30';
+  const dates=readDates(), bills=cfg.billActuals||[], lastT=M.last;
+  const cyc=[];
+  for(let i=0;i+1<dates.length;i++){
+    const start=dates[i], end=dates[i+1], A=start+' '+rt, Z=end+' '+rt;
+    if(Z<=M.first||A>lastT) continue;
+    const w=windowSum(A,Z), bill=bills.find(b=>b.meterDate===end)||null;
+    const pre=bill?null:(cfg.preSolar||[]).find(p=>p.date===end&&+p.units>0)||null;
+    const status= Z<=lastT ? (w.out/w.slots>0.02?'partial':'complete') : 'current';
+    cyc.push({start,end,A,Z,billMonth:end.slice(0,7),bill,pre,w,status,nDays:daysBetween(start,end)});
+  }
+  // ปรับเทียบ: หน่วยตามบิล ÷ หน่วยที่ระบบวัด (เฉพาะรอบที่ข้อมูลจริง ≥95% และไม่มีช่วงนอกข้อมูล)
+  const calib=cyc.filter(c=>c.bill&&c.status==='complete'&&c.w.measured>=0.95&&c.w.units>1);
+  const sb=calib.reduce((s,c)=>s+(+c.bill.units),0), ss=calib.reduce((s,c)=>s+c.w.units,0);
+  let k=calib.length&&ss>0?sb/ss:1; const kOk=k>0.85&&k<1.15; if(!kOk) k=1;
+  M.calib={k,n:calib.length,ok:kOk,raw:ss>0?sb/ss:null,items:calib.map(c=>({m:c.billMonth,pea:+c.bill.units,sys:c.w.units,d:(c.w.units-c.bill.units)/c.bill.units*100}))};
+  // ใช้ 14 วันล่าสุดที่ครบเพื่อคาดส่วนที่เหลือของรอบปัจจุบัน
+  const recent=goodDays(M.days).slice(-14);
+  const avg=f=>recent.length?recent.reduce((s,d)=>s+d[f],0)/recent.length:0;
+  const today=todayISO();
+  cyc.forEach(c=>{ const w=c.w;
+    c.unitsSys=w.units; c.unitsCal=w.units*k; c.cons=w.cons;
+    if(c.status==='current'){ const elapsed=(Date.parse(lastT.replace(' ','T')+':00Z')-Date.parse(c.A.replace(' ','T')+':00Z'))/86400000, rem=Math.max(0,c.nDays-elapsed);
+      c.elapsed=elapsed; c.rem=rem; c.unitsSoFar=c.unitsCal; c.consSoFar=w.cons;
+      c.unitsCal=c.unitsCal+avg('imp')*k*rem; c.cons=w.cons+avg('cons')*rem; }
+    else if(c.status==='partial'&&c.pre){ c.exact=true; c.unitsCal=+c.pre.units; c.cons=+c.pre.units+Math.max(0,w.cons-w.units); }
+    else if(c.status==='partial'){ const f=Math.max(0.05,1-w.out/w.slots); c.scale=1/f; c.unitsCal=c.unitsCal/f; c.cons=c.cons/f; }
+    const units=c.bill?+c.bill.units:c.unitsCal;
+    c.units=units; c.actual=c.bill&&c.bill.total!=null?+c.bill.total:billFor(units,c.end);
+    c.noSolar=billFor(c.cons,c.end); c.saving=c.noSolar-c.actual;
+    c.savingNow=billFor(c.cons,today)-billFor(units,today);
+    c.diffPct=c.bill&&c.status==='complete'&&c.w.measured>=0.9? (c.unitsSys-c.bill.units)/c.bill.units*100 : null;
+    c.label=`${thd(c.start)} → ${thd(c.end)}`;
+  });
+  M.cycles=cyc;
+}
+
+/* ======================================================================
+   ความคุ้มค่า
+   ====================================================================== */
+function eraStart(){ const a=cfg.pvChangeDate||'2000-01-01', b=cfg.netMeterUntil?addDays(cfg.netMeterUntil,1):'2000-01-01'; return a>b?a:b; }
+function seasonalIndex(){
+  const pre=(cfg.preSolar||[]).filter(p=>!p.partial&&+p.units>0);
+  const byM={}; pre.forEach(p=>{ const m=+p.date.slice(5,7); (byM[m]=byM[m]||[]).push(+p.units); });
+  if(Object.keys(byM).length<12) return null;
+  const v={}; for(let m=1;m<=12;m++) v[m]=byM[m].reduce((a,b)=>a+b,0)/byM[m].length;
+  const mean=Object.values(v).reduce((a,b)=>a+b,0)/12; const idx={}; for(let m=1;m<=12;m++) idx[m]=v[m]/mean; return idx;
+}
+function irrOf(cf){ const npv=r=>cf.reduce((s,c,i)=>s+c/Math.pow(1+r,i),0);
+  if(npv(0)<=0) return null; let lo=-0.99,hi=1; for(let k=0;k<200;k++){ const mid=(lo+hi)/2; if(npv(mid)>0) lo=mid; else hi=mid; }
+  return Math.pow(1+(lo+hi)/2,12)-1; }
+function computeROI(opt={}){
+  const inv=+cfg.investment||0, es=eraStart(), today=todayISO();
+  let base=M.cycles.filter(c=>c.status==='complete'&&c.start>=es&&c.w.measured>=0.8).slice(-12), baseEra=true;
+  if(!base.length){ base=M.cycles.filter(c=>c.status==='complete').slice(-12); baseEra=false; }
+  if(!base.length) return null;
+  const sf=opt.saveFactor||1;
+  const idx=seasonalIndex();
+  let annual, seasonal=false;
+  const meanCons=base.reduce((s,c)=>s+c.cons,0)/base.length, meanUnits=base.reduce((s,c)=>s+c.units,0)/base.length;
+  if(idx){ const bIdx=base.reduce((s,c)=>s+idx[+c.end.slice(5,7)],0)/base.length; annual=0;
+    for(let m=1;m<=12;m++){ const cons=meanCons*idx[m]/bIdx; annual+=billFor(cons,today)-billFor(meanUnits,today); } seasonal=true; }
+  else annual=base.reduce((s,c)=>s+c.savingNow,0)/base.length*12;
+  annual*=sf;
+  const esc=(opt.esc!=null?opt.esc:+cfg.escalation||0)/100, deg=(+cfg.degradation||0)/100, Y=+cfg.horizon||10, nM=Y*12;
+  const cf=[-inv]; for(let m=1;m<=nM;m++){ const y=Math.floor((m-1)/12); cf.push(annual/12*Math.pow(1+esc,y)*Math.pow(1-deg,y)); }
+  const irr=irrOf(cf), lifetime=cf.slice(1).reduce((a,b)=>a+b,0);
+  // เงินที่ประหยัดได้จริงแล้ว (บิลจริงถ้ามี) ตั้งแต่วันเริ่มใช้งาน
+  const inst=cfg.installDate||(M.first?M.first.slice(0,10):today);
+  let realized=0; M.cycles.forEach(c=>{ if(c.end<=inst) return;
+    if(c.status==='complete') realized+=c.saving;
+    else if(c.status==='partial') realized+=c.exact?c.saving:c.saving/(c.scale||1);
+    else if(c.status==='current'){ const so=billFor(c.consSoFar,c.end)-billFor(c.unitsSoFar,c.end); realized+=Math.max(0,so); } });
+  let cum=realized, pm=null; const elapsedM=Math.max(0,daysBetween(inst,today)/30.44);
+  for(let m=1;m<=nM*2&&cum<inv;m++){ const y=Math.floor((elapsedM+m-1)/12); cum+=annual/12*Math.pow(1+esc,y)*Math.pow(1-deg,y); if(cum>=inv){ pm=m; break; } }
+  const paybackYears=pm!=null?(elapsedM+pm)/12:null;
+  const payDate=pm!=null?monthShift(today,pm,1).slice(0,7):null;
+  return {inv,annual,monthly:annual/12,irr,lifetime,realized,paybackYears,payDate,base,baseEra,seasonal,meanCons,meanUnits,inst,horizon:Y,esc:esc*100};
+}
+
+/* ======================================================================
+   แบต / EV / แบตลูก 2 / TOU / สำรองไฟ / ไฟฟ้า
+   ====================================================================== */
+function battStats(){
+  const gd=goodDays(M.days); if(!gd.length) return null;
+  const dis=gd.reduce((s,d)=>s+d.m.dis,0), chg=gd.reduce((s,d)=>s+d.m.chg,0), n=gd.length;
+  const usable=(+cfg.battKWh||14.336)*(+cfg.battDoD||95)/100;
+  const cyc=dis/n/usable, K=backupK();
+  const lowNights=gd.filter(d=>d.socMin<=((+cfg.backup.floor||8)+3)).length;
+  let nightImp=0; gd.forEach(d=>{ const a=d.a; for(let s=0;s<NS;s++){ const mm=s*5; if((mm<6*60||mm>=18*60)&&a.has[s]) nightImp+=a.imp[s]*H; } });
+  return {n,dis,chg,rte:chg>0?dis/chg:null,usable,cycPerDay:cyc,years8000:cyc>0?8000/(cyc*365):null,K,lowNights,nightImpDay:nightImp/n,
+    lossDay:gd.reduce((s,d)=>s+d.loss,0)/n};
+}
+let __bk=null;
+function backupK(){
+  if(__bk&&__bk.n0===M.keys.length) return __bk.v;
+  const vals=[]; let seg=null, prevT=null;
+  const close=()=>{ if(seg&&seg.s0-seg.s1>=20) vals.push(seg.e/(seg.s0-seg.s1)); seg=null; };
+  for(const k of M.keys){ const r=store[k], t=Date.parse(k.replace(' ','T')+':00Z'), night=r.min>=19*60||r.min<6*60;
+    if(night&&r.grid<=0.05&&r.batt>0.05){ if(!seg||t-prevT!==300000){ close(); seg={s0:r.soc,s1:r.soc,e:0}; } seg.e+=(+r.cons||0)*H; seg.s1=r.soc; }
+    else close(); prevT=t; }
+  close();
+  let v=null; if(vals.length) v={k:median(vals),n:vals.length,p10:quant(vals,0.1),p90:quant(vals,0.9)};
+  __bk={n0:M.keys.length,v}; return v;
+}
+function backupNeeds(hours,fromHM,toHM){
+  const K=M.keys, n=Math.round(hours*12), f=hm2min(fromHM), t=hm2min(toHM);
+  const winLen=((t-f+1440)%1440)||1440, lastOff=winLen-Math.round(hours*60); const all=[];
+  if(lastOff<0) return {all:null,tooLong:true};
+  for(let i=0;i+n-1<K.length;i++){ const r=store[K[i]]; if(r.min%30) continue; const off=(r.min-f+1440)%1440; if(off>lastOff) continue;
+    const t0=Date.parse(K[i].replace(' ','T')+':00Z'); if(Date.parse(K[i+n-1].replace(' ','T')+':00Z')!==t0+(n-1)*300000) continue;
+    let e=0; for(let j=i;j<i+n;j++) e+=(+store[K[j]].cons||0)*H; all.push(e); }
+  if(!all.length) return {all:null};
+  return {all:{n:all.length,med:median(all),p95:quant(all,0.95),max:Math.max(...all)}};
+}
+/* EV ชาร์จจากไฟเหลือ + แบตลูก 2 — ใช้ศักยภาพแดดจากโมเดลเดียวกับ curtailment */
+function simulateEV(capacity){
+  const gd=goodDays(M.days).filter(d=>!cfg.pvChangeDate||d.dayKey>=cfg.pvChangeDate); if(!gd.length) return null;
+  const e=cfg.ev, b=cfg.batt2, chg=+e.chargerKW||3.5, rt=+b.rtEff||0.9, maxCh=+b.maxChargeKW||3, full=+cfg.socFull||98;
+  let soc=0,evDirect=0,fromB2=0,wasted=0;
+  gd.forEach(d=>{ const a=d.a, win=(e.sched||{})[String(wdMon0(d.dayKey))], ws=win?hm2min(win[0])/5:null, we=win?hm2min(win[1])/5:null;
+    for(let s=0;s<NS;s++){ if(!a.has[s]) continue;
+      let head=a.pot[s]-a.cons[s]; head= a.soc[s]>=full-3 ? Math.max(0,head) : Math.max(0,head-a.chg[s]);
+      if(win&&s>=ws&&s<we){ const t=Math.min(head,chg); evDirect+=t*H; head-=t; }
+      if(capacity>0){ const room=(capacity-soc)/H, c=Math.min(head,Math.max(0,room),maxCh); soc+=c*H; head-=c; }
+      wasted+=head*H; }
+    if(capacity>0){ fromB2+=soc*rt; soc=0; } });
+  const wks=gd.length/7, needWk=(+e.targetKmWeek||0)*(+e.kwhPer100||17)/100, totalWk=(evDirect+fromB2)/wks;
+  return {capacity,nDays:gd.length,evDirectWk:evDirect/wks,fromB2Wk:fromB2/wks,totalWk,wastedWk:wasted/wks,needWk,
+    coverPct:needWk>0?Math.min(100,totalWk/needWk*100):0,gridNeedWk:Math.max(0,needWk-totalWk)};
+}
+function batt2Table(){
+  const base=simulateEV(0); if(!base) return null;
+  const r=computeROI(), house=r?r.meanUnits:0, today=todayISO();
+  const rows=(cfg.batt2.sizes||[5,7,10,14]).map(C=>{ const sim=simulateEV(C);
+    const gNo=base.gridNeedWk*4.345, gW=sim.gridNeedWk*4.345;
+    const saveYr=(billFor(house+gNo,today)-billFor(house+gW,today))*12, price=C*(+cfg.batt2.pricePerKWh||5000);
+    return {C,price,sim,saveYr,payback:saveYr>0?price/saveYr:null}; });
+  return {base,rows,house};
+}
+function billTOU(pk,op,dk){ const t=cfg.tou; const energy=pk*(+t.peakRate||0)+op*(+t.offRate||0), u=pk+op;
+  const ft=ftOn(dk)*u, svc=+t.service||0, vat=(energy+ft+svc)*(+cfg.vat||0)/100; return energy+ft+svc+vat; }
+
+/* ไฟฟ้า: ตารางอ้างอิง ต้องยืนยันกับมาตรฐานการติดตั้งทางไฟฟ้าฯ (วสท.) ก่อนใช้ตัดสินใจ */
+const IZ_BASE={conduit_air:{10:47,16:65,25:87,35:108,50:133},free_air:{10:63,16:87,25:115,35:145,50:180}};
+const K_TEMP={25:1.22,30:1.15,35:1.08,40:1.00,45:0.91,50:0.82,55:0.71,60:0.58};
+const R_CABLE={10:1.83,16:1.15,25:0.727,35:0.524,50:0.387};
+const BANDS=[[0,0.5],[0.5,5],[5,10],[10,20],[20,30],[30,40],[40,50],[50,63],[63,9999]];
+function ampacity(){ const e=cfg.elec; const base=(IZ_BASE[e.method]||{})[e.size]||0, kt=K_TEMP[e.temp]!=null?K_TEMP[e.temp]:1, kg=+e.kgroup||1;
+  const iz=base*kt*kg; return {base,kt,kg,iz,In:+e.In,ok:(+e.In)<=iz}; }
+
+/* ======================================================================
+   UI
+   ====================================================================== */
+const f0=n=>Math.round(+n||0).toLocaleString('en-US');
+const f1=n=>(Math.round((+n||0)*10)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const f2=n=>(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct=n=>Math.round((+n||0)*100);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sgn=n=>(n>0?'+':'')+f1(n);
+const ins=list=>list.map(([t,ic,x])=>`<div class="ins ${t}"><div class="ic">${ic}</div><div>${x}</div></div>`).join('');
+const kpiCards=cards=>cards.map(c=>`<div class="card"><div class="k-label">${c.dot?`<i class="dot ${c.dot}"></i>`:''}${c.l}</div>
+  <div class="k-val mono"${c.col?` style="color:${c.col}"`:''}>${c.v}<small> ${c.u||''}</small></div><div class="k-sub">${c.s||''}</div></div>`).join('');
+function toast(msg,type='ok'){ $('toast').innerHTML=`<div class="toast ${type}">${msg}</div>`;
+  if(type==='ok') setTimeout(()=>{ if($('toast').firstChild) $('toast').innerHTML=''; },9000); }
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const charts={};
+function mkChart(id,conf){ if(typeof Chart==='undefined') return null; if(charts[id]) charts[id].destroy();
+  const el=$(id); if(!el) return null; charts[id]=new Chart(el,conf); return charts[id]; }
+function chartBase(){ const g=cssv('--chartgrid'), t=cssv('--muted');
+  return {responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{callbacks:{}}},
+    scales:{x:{grid:{color:g},ticks:{color:t,maxRotation:0,autoSkip:true}},y:{grid:{color:g},ticks:{color:t},beginAtZero:true}}}; }
+
+const PAGE_META={home:['ภาพรวม','ค่าไฟรอบนี้ · ความคุ้มค่า · สิ่งที่ควรรู้'],energy:['พลังงาน','รายวัน · แหล่งจ่าย 24 ชม. · พีค'],
+  money:['บิลและความคุ้มค่า','บิล PEA จริงเทียบระบบ · ROI · TOU'],system:['แบต · EV · ไฟฟ้า','แบตเตอรี่ · ไฟที่ถูกหรี่ · EV · สำรองไฟดับ · สายเมน'],
+  settings:['ตั้งค่าและข้อมูล','ไฟล์ · ระบบ · ค่าไฟ · คุณภาพข้อมูล'],report:['รายงานรอบบิล','พิมพ์หรือบันทึกเป็น PDF']};
+let currentPage='home', selCycle=null, selDay=null;
+const curCycle=()=>M&&M.cycles.find(c=>c.end===selCycle)||(M&&M.cycles[M.cycles.length-1])||null;
+const cycleDays=c=>c?M.days.filter(d=>d.dayKey>=c.start&&d.dayKey<c.end):[];
+
+function recompute(){ buildModel(); }
+function render(){
+  const has=M&&M.days.length>0;
+  if(!has&&!['home','settings'].includes(currentPage)) currentPage='home';
+  Object.keys(PAGE_META).forEach(p=>{ const el=$('pg-'+p); if(el) el.hidden=p!==currentPage; });
+  document.querySelectorAll('#tabbar .tab').forEach(b=>{ b.classList.toggle('active',b.dataset.p===currentPage); b.disabled=!has&&!['home','settings'].includes(b.dataset.p); });
+  const pm=PAGE_META[currentPage]; $('pageTitle').textContent=pm[0]; $('pageSub').textContent=pm[1];
+  $('drop').hidden=has; $('homeContent').hidden=!has;
+  $('cycleWrap').hidden=!(has&&['home','energy','report'].includes(currentPage));
+  $('sysTag').textContent=`โซลาร์ ${cfg.pvAfter} kWp · อินเวอร์เตอร์ ${cfg.invAC} kW · แบต ${(+cfg.battKWh).toFixed(1)} kWh`;
+  if(has){ const sel=$('cycleSel'); if(!selCycle||!M.cycles.find(c=>c.end===selCycle)) selCycle=M.cycles[M.cycles.length-1].end;
+    sel.innerHTML=M.cycles.slice().reverse().map(c=>`<option value="${c.end}">${c.label} · บิล ${thMonth(c.billMonth)}${c.status==='current'?' (รอบนี้)':''}</option>`).join(''); sel.value=selCycle; }
+  try{
+    if(currentPage==='settings') return renderSettings();
+    if(!has) return;
+    if(currentPage==='home') renderHome();
+    else if(currentPage==='energy') renderEnergy();
+    else if(currentPage==='money') renderMoney();
+    else if(currentPage==='system') renderSystem();
+    else if(currentPage==='report') renderReport();
+  }catch(e){ console.error(e); toast('แสดงผลไม่สำเร็จ: '+esc(e.message||e),'err'); }
+}
+
+/* ============================== HOME ============================== */
+function renderHome(){
+  const c=curCycle(); if(!c) return; const w=c.w, k=M.calib.k;
+  const pd=cycleDays(c), gd=goodDays(pd);
+  const ss=w.cons>0?Math.max(0,1-w.impRaw/w.cons):0;
+  $('kpis').innerHTML=kpiCards([
+    {l:'ผลิต',dot:'d-solar',v:f0(w.prod),u:'kWh',s:pd.length?`เฉลี่ย ${f1(w.prod/Math.max(1,(w.n+w.nf)/NS))} kWh/วัน`:''},
+    {l:'ใช้ไฟในบ้าน',dot:'d-load',v:f0(w.cons),u:'kWh',s:`เฉลี่ย ${f1(w.cons/Math.max(1,(w.n+w.nf)/NS))} kWh/วัน (รวม EV)`},
+    {l:'ซื้อจากกริด',dot:'d-buy',v:f1(c.status==='current'?c.unitsSoFar:c.units),u:'kWh',s:c.bill?'ตามบิล PEA':(k!==1?`ระบบวัด × ${k.toFixed(3)} (ปรับเทียบบิล)`:'ระบบวัด')},
+    {l:'พึ่งพาตัวเอง',v:pct(ss),u:'%',s:'ส่วนของการใช้ที่ไม่ต้องซื้อ'},
+    {l:'ไฟที่ถูกหรี่ทิ้ง',dot:'d-loss',v:f1(w.curt),u:'kWh',s:'แบตเต็ม ไม่มีโหลดรับ (Zero Export)'},
+    {l:'ประหยัด',dot:'d-save',v:f0(c.status==='current'?Math.max(0,billFor(c.consSoFar,c.end)-billFor(c.unitsSoFar,c.end)):c.saving),u:'฿',s:c.status==='current'?'ถึงตอนนี้ของรอบ':`เทียบไม่มีโซลาร์ ${f0(c.noSolar)} ฿`}]);
+  // bill card
+  const bd=billBreakdown(c.units,c.end), cur=c.status==='current';
+  const src=c.bill?'บิล PEA จริง':cur?'คาดการณ์ทั้งรอบ':'ประมาณจากระบบวัด (ยังไม่มีบิล)';
+  $('billCard').innerHTML=`<div class="cap">ค่าไฟรอบ ${c.label} · ${src}</div>
+    <div class="big mono">${f2(c.actual)}<span class="cur"> ฿</span></div>
+    <div class="split">
+      <div><span>หน่วยที่คิดเงิน</span><b class="mono">${f1(c.units)} kWh</b></div>
+      ${cur?`<div><span>ซื้อแล้ว (${f1(c.elapsed)}/${c.nDays} วัน)</span><b class="mono">${f1(c.unitsSoFar)} kWh</b></div>`:''}
+      ${c.bill?`<div><span>ระบบวัดได้</span><b class="mono">${f1(c.unitsSys)} kWh (${sgn(c.diffPct||0)}%)</b></div>`:''}
+      <div><span>ขั้นบันได / ค่าพลังงาน</span><b class="mono">ขั้น ${bd.topTier} · ${f2(bd.lines.length?bd.energy/c.units:0)} ฿/หน่วย</b></div>
+    </div>
+    <div class="meta">ค่าพลังงาน ${f2(bd.energy)} + บริการ ${f2(bd.service)} + Ft ${f2(bd.ft)} (${bd.ftRate}) + VAT ${f2(bd.vatAmt)} = ${f2(bd.total)} ฿
+      ${!ftVerified(c.end)?' · Ft รอบนี้ยังไม่ยืนยันกับบิล':''}${!tariffOn(c.end).verified?' · อัตรานี้ยังไม่ยืนยันกับบิล':''}</div>`;
+  // ROI card
+  const r=computeROI();
+  if(!r){ $('roiCard').innerHTML='<div class="cap">ความคุ้มค่า</div><div class="meta">ต้องมีรอบบิลที่ข้อมูลครบอย่างน้อย 1 รอบ</div>'; }
+  else{ const prog=Math.min(100,r.inv>0?r.realized/r.inv*100:0);
+    $('roiCard').innerHTML=`<div class="cap">ผลตอบแทน (IRR ${r.horizon} ปี)</div>
+      <div class="big mono">${r.irr!=null?(r.irr*100).toFixed(1):'—'}<span class="cur"> %/ปี</span></div>
+      <div class="split">
+        <div><span>ประหยัดต่อเดือน (อัตราปัจจุบัน)</span><b class="mono">${f0(r.monthly)} ฿</b></div>
+        <div><span>คืนทุน</span><b class="mono">${r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปี ('+thMonth(r.payDate)+')':'เกิน '+r.horizon*2+' ปี'}</b></div>
+        <div><span>รวม ${r.horizon} ปี</span><b class="mono">${f0(r.lifetime)} ฿</b></div>
+      </div>
+      <div class="meta">ฐาน ${r.base.length} รอบบิล (${thMonth(r.base[0].billMonth)}–${thMonth(r.base[r.base.length-1].billMonth)})${r.baseEra?' ระบบ 9.1 kWp ไม่มีหมุนย้อน':' (ปนยุคระบบเก่า)'} · ค่าไฟขึ้น ${r.esc}%/ปี${r.seasonal?' · ปรับฤดูกาลแล้ว':' · ยังไม่ปรับฤดูกาล'}
+        <br>ประหยัดได้จริงแล้ว ${f0(r.realized)} / ${f0(r.inv)} ฿ (${prog.toFixed(0)}%)</div>
+      <div class="progress"><i style="width:${prog}%"></i></div>`; }
+  // insights
+  const out=[];
+  if(c.bill&&c.diffPct!=null) out.push([Math.abs(c.diffPct)<=5?'good':'warn','✓',`บิลรอบนี้ ${f1(c.bill.units)} หน่วย ระบบวัดได้ ${f1(c.unitsSys)} (${sgn(c.diffPct)}%) — ${Math.abs(c.diffPct)<=5?'ตรงกันในเกณฑ์ ±5%':'ต่างเกิน 5% ตรวจวันอ่านมิเตอร์/ข้อมูลขาด'}`]);
+  else if(M.calib.n) out.push(['info','⚖',`ยังไม่มีบิลรอบนี้ ใช้ค่าปรับเทียบจากบิล ${M.calib.n} ใบ (ระบบวัดต่ำกว่ามิเตอร์ PEA ${f1((M.calib.k-1)*100)}%)`]);
+  if(gd.length){ const ni=gd.reduce((s,d)=>{ let x=0; for(let i=0;i<NS;i++){ const m=i*5; if((m<6*60||m>=18*60)&&d.a.has[i]) x+=d.a.imp[i]*H; } return s+x; },0)/gd.length;
+    const low=gd.filter(d=>d.socMin<=(+cfg.backup.floor||8)+3).length;
+    out.push([ni>2?'warn':'info','🌙',`กลางคืนยังซื้อไฟเฉลี่ย ${f1(ni)} kWh/คืน · แบตลงถึงจุดตัด ${low}/${gd.length} คืน — ${low>gd.length/3?'แบตไม่พอข้ามคืนบ่อย ถ้าชาร์จ EV กลางคืนให้ย้ายมากลางวัน':'แบตพอใช้ข้ามคืนเกือบทุกวัน'}`]); }
+  if(w.curt>3) out.push(['warn','✂',`ไฟถูกหรี่ทิ้ง ${f1(w.curt)} kWh ในรอบนี้ (≈ ${f1(w.curt/Math.max(1,(w.n+w.nf)/NS))} kWh/วัน) — ใช้ฟรีได้ถ้าย้ายโหลด (ชาร์จ EV, ซักผ้า, ปั๊มน้ำ) มาช่วงบ่ายที่แบตเต็ม`]);
+  const prev=M.cycles[M.cycles.indexOf(c)-1];
+  if(prev&&prev.status!=='partial'){ const a=c.units/c.nDays, b=prev.units/prev.nDays;
+    if(Math.abs(a-b)>1) out.push([a>b?'warn':'good',a>b?'↑':'↓',`ซื้อไฟเฉลี่ย ${f1(a)} kWh/วัน เทียบรอบก่อน ${f1(b)} (${a>b?'เพิ่ม':'ลด'} ${f1(Math.abs(a-b))})`]); }
+  if(gd.length){ const mx=gd.reduce((x,y)=>y.imp>x.imp?y:x); out.push(['info','⚡',`วันที่ซื้อไฟมากสุด ${thd(mx.dayKey)} ${f1(mx.imp)} kWh · ผลิตต่ำสุด ${thd(gd.reduce((x,y)=>y.prod<x.prod?y:x).dayKey)}`]); }
+  const missing=pd.filter(d=>d.nf>12);
+  if(missing.length) out.push(['info','🧩',`ข้อมูลขาด ${missing.length} วัน (${missing.map(d=>thd(d.dayKey)).join(', ')}) เติมด้วยค่ามัธยฐานของช่วงเวลาเดียวกันจากวันใกล้เคียง`]);
+  $('insights').innerHTML=ins(out);
+  // trend
+  const o=chartBase(); o.scales.y2={position:'right',min:0,max:100,grid:{display:false},ticks:{color:cssv('--muted')}};
+  mkChart('trendChart',{type:'bar',data:{labels:pd.map(d=>d.dayKey.slice(8)+'/'+d.dayKey.slice(5,7)),datasets:[
+    {label:'ผลิต kWh',data:pd.map(d=>+d.prod.toFixed(1)),backgroundColor:cssv('--solar')},
+    {label:'ใช้ kWh',data:pd.map(d=>+d.cons.toFixed(1)),backgroundColor:cssv('--load')},
+    {type:'line',label:'ซื้อกริด kWh',data:pd.map(d=>+d.imp.toFixed(1)),borderColor:cssv('--buy'),backgroundColor:cssv('--buy'),pointRadius:2},
+    {type:'line',label:'SOC สูงสุด %',data:pd.map(d=>d.n?d.socMax:null),borderColor:cssv('--battery'),pointRadius:0,borderDash:[4,3],yAxisID:'y2'}]},options:o});
+}
+
+/* ============================== ENERGY ============================== */
+function splitSlot(a,s){ const c=Math.max(a.cons[s],0); let g=a.imp[s], b=a.dis[s]; const t=g+b; if(t>c&&t>0){ const k=c/t; g*=k; b*=k; } return {s:Math.max(0,c-g-b),b,g,c}; }
+function renderEnergy(){
+  const c=curCycle(); const pd=cycleDays(c), gd=goodDays(pd); const n=gd.length||1;
+  if(!gd.length){ $('facts').innerHTML=''; $('factNotes').innerHTML=ins([['info','i','รอบนี้ยังไม่มีวันที่ข้อมูลครบ']]); }
+  else{
+    let dayC=0,nightC=0,S=0,B=0,G=0,base=[]; const hr=Array.from({length:24},()=>({s:0,b:0,g:0,n:0})), dh=Array.from({length:24},()=>[]); const samples=[];
+    gd.forEach(d=>{ const a=d.a; let mn=Infinity; const hs=new Array(24).fill(0), hn=new Array(24).fill(0);
+      for(let s=0;s<NS;s++){ if(!a.has[s]) continue; const x=splitSlot(a,s), m=s*5, h=m/60|0;
+        if(d.sunStart!=null&&m>=d.sunStart&&m<=d.sunEnd) dayC+=x.c*H; else nightC+=x.c*H;
+        S+=x.s*H; B+=x.b*H; G+=x.g*H; hr[h].s+=x.s; hr[h].b+=x.b; hr[h].g+=x.g; hr[h].n++; hs[h]+=x.c; hn[h]++;
+        if(m>=60&&m<=240) mn=Math.min(mn,a.cons[s]);
+        samples.push({dk:d.dayKey,m,...x,soc:a.soc[s]}); }
+      if(mn<Infinity) base.push(mn); for(let h=0;h<24;h++) if(hn[h]>=6) dh[h].push(hs[h]/hn[h]); });
+    const C=S+B+G||1, kwp=gd.reduce((s,d)=>s+pvKwpOn(d.dayKey),0)/n;
+    const prod=gd.reduce((s,d)=>s+d.prod,0)/n, pot=gd.reduce((s,d)=>s+d.pot,0)/n, loss=gd.reduce((s,d)=>s+d.loss,0)/n, baseW=median(base)*1000;
+    $('facts').innerHTML=kpiCards([
+      {l:'ใช้ไฟกลางวัน',dot:'d-solar',v:f1(dayC/n),u:'kWh/วัน',s:`${pct(dayC/(dayC+nightC))}% · ช่วงมีแดด`},
+      {l:'ใช้ไฟกลางคืน',dot:'d-batt',v:f1(nightC/n),u:'kWh/วัน',s:`${pct(nightC/(dayC+nightC))}% · จากแบต/กริด`},
+      {l:'ไฟมาจาก',v:pct(S/C),u:'% โซลาร์ตรง',s:`แบต ${pct(B/C)}% · กริด ${pct(G/C)}%`},
+      {l:'โหลดพื้นฐาน 01–04 น.',v:f0(baseW),u:'W',s:`≈ ${f0(baseW*24*30.4/1000)} kWh/เดือน`},
+      {l:'ผลิตจริง',dot:'d-solar',v:f1(prod/kwp),u:'kWh/kWp/วัน',s:`${f1(prod)} kWh/วัน · ถูกจำกัดด้วยโหลด+แบต`},
+      {l:'ศักยภาพแดด',dot:'d-solar',v:f1(pot/kwp),u:'kWh/kWp/วัน',s:`${f1(pot)} kWh/วัน ถ้าไม่ถูกหรี่`},
+      {l:'สูญเสียในระบบ',dot:'d-loss',v:f1(loss),u:'kWh/วัน',s:`ผลิต+ซื้อ+แบตจ่าย−ชาร์จ−ใช้ · ${pct(loss/(C/n))}% ของโหลด`},
+      {l:'แบตจ่ายเฉลี่ย',dot:'d-batt',v:f1(gd.reduce((s,d)=>s+d.m.dis,0)/n),u:'kWh/วัน',s:`ชาร์จ ${f1(gd.reduce((s,d)=>s+d.m.chg,0)/n)} kWh/วัน`}]);
+    $('factNotes').innerHTML=ins([
+      ['info','☀',`ระบบ Zero Export ผลิตเท่าที่โหลดกับแบตรับได้ ตัวเลข "ผลิตจริง" จึงไม่ใช่ตัววัดแดด ให้ดู "ศักยภาพแดด" (${f1(pot/kwp)} kWh/kWp/วัน) แทน`],
+      ['info','🔌',`สูญเสียในระบบ ${f1(loss)} kWh/วัน คือไฟเลี้ยงอินเวอร์เตอร์และการแปลงไฟเข้า-ออกแบต (ไม่มีในบิล แต่หักออกจากที่ผลิตได้)`]]);
+    // mix chart + hour table
+    hr.forEach(h=>{ if(h.n){ h.s/=h.n; h.b/=h.n; h.g/=h.n; } });
+    $('mixNote').textContent=`${gd.length} วันที่ข้อมูลครบในรอบนี้`;
+    const o=chartBase(); o.scales.x.stacked=true; o.scales.y.stacked=true;
+    mkChart('mixChart',{type:'bar',data:{labels:hr.map((_,i)=>pad(i)),datasets:[
+      {label:'โซลาร์',data:hr.map(h=>+h.s.toFixed(3)),backgroundColor:cssv('--solar')},
+      {label:'แบต',data:hr.map(h=>+h.b.toFixed(3)),backgroundColor:cssv('--battery')},
+      {label:'กริด',data:hr.map(h=>+h.g.toFixed(3)),backgroundColor:cssv('--buy')}]},options:o});
+    const top20=samples.slice().sort((x,y)=>y.c-x.c).slice(0,20), tC=top20.reduce((s,x)=>s+x.c,0)||1;
+    const gridHeavy=samples.filter(x=>x.c>0.05&&x.g/x.c>0.5).length/12/n;
+    $('mixKpis').innerHTML=kpiCards([
+      {l:'ตอนโหลดพีค 20 ครั้ง ไฟมาจาก',v:pct(top20.reduce((s,x)=>s+x.s,0)/tC),u:'% โซลาร์',s:`แบต ${pct(top20.reduce((s,x)=>s+x.b,0)/tC)}% · กริด ${pct(top20.reduce((s,x)=>s+x.g,0)/tC)}%`},
+      {l:'ชั่วโมงที่กริดจ่าย >50% ของโหลด',v:f1(gridHeavy),u:'ชม./วัน'},
+      {l:'พีคโหลดสูงสุด',dot:'d-load',v:f1(top20[0]?top20[0].c:0),u:'kW',s:top20[0]?`${thd(top20[0].dk)} ${minToHM(top20[0].m)}`:''}]);
+    const bar=h=>{ const t=h.s+h.b+h.g||1; return `<div class="mixbar"><i style="width:${h.s/t*100}%;background:var(--solar)"></i><i style="width:${h.b/t*100}%;background:var(--battery)"></i><i style="width:${h.g/t*100}%;background:var(--buy)"></i></div>`; };
+    $('hourBody').innerHTML=hr.map((h,i)=>{ const v=dh[i]; return `<tr><td class="mono">${pad(i)}:00</td><td class="mono">${f2(h.s+h.b+h.g)}</td><td class="mono">${f2(v.length?Math.min(...v):0)}</td><td class="mono">${f2(v.length?Math.max(...v):0)}</td><td class="mono">${f2(quant(v,.1))}–${f2(quant(v,.9))}</td><td style="text-align:left">${bar(h)}</td></tr>`; }).join('');
+    const V=+cfg.elec.vFallback||230, topI=samples.slice().sort((x,y)=>y.g-x.g).slice(0,20);
+    $('topImpBody').innerHTML=topI.map(x=>`<tr><td>${thd(x.dk)} ${minToHM(x.m)}</td><td class="mono pos">${f2(x.g)}</td><td class="mono">${f1(x.g*1000/V)}</td><td class="mono">${f2(x.c)}</td><td class="mono">${f2(x.s)}</td><td class="mono">${f2(x.b)}</td><td class="mono">${f0(x.soc)}%</td></tr>`).join('');
+    const lowSoc=topI.filter(x=>x.soc<=(+cfg.backup.floor||8)+5).length;
+    $('topImpNote').textContent=`${lowSoc}/20 ครั้งเกิดตอน SOC ต่ำ (แบตหมด) · ที่เหลือคือโหลดเกินที่อินเวอร์เตอร์/แบตจ่ายทัน · กระแสคิดจาก ${V} V สมมติ`;
+  }
+  // day table
+  if(!selDay||!pd.find(d=>d.dayKey===selDay)){ const f=gd[gd.length-1]||pd[pd.length-1]; selDay=f?f.dayKey:null; }
+  $('dayBody').innerHTML=pd.slice().reverse().map(d=>`<tr class="click${d.dayKey===selDay?' sel':''}${d.full?'':' dim'}" data-day="${d.dayKey}">
+    <td>${thd(d.dayKey)}</td><td class="mono">${f1(d.prod)}</td><td class="mono">${f1(d.cons)}</td><td class="mono pos">${f1(d.imp)}</td><td class="mono">${f1(d.curt)}</td>
+    <td class="mono">${pct(d.selfSuff)}%</td><td class="mono">${f0(d.socMin)}–${f0(d.socMax)}%</td><td class="mono">${f1(d.peakCons)} <span class="k-sub">${minToHM(d.peakT)}</span></td>
+    <td>${d.full?'<span class="tag ok">ครบ</span>':`<span class="tag warn">${pct(d.coverage)}%</span>`}${d.suspect?' <span class="tag bad">น่าสงสัย</span>':''}</td></tr>`).join('');
+  renderDay();
+}
+function renderDay(){
+  const d=dayOf(selDay); if(!d) return; const a=d.a;
+  $('dayLabel').textContent=`${thd(d.dayKey)} · ผลิต ${f1(d.prod)} · ใช้ ${f1(d.cons)} · ซื้อ ${f1(d.imp)} · ถูกหรี่ ${f1(d.curt)} kWh`;
+  const L=[],S=[],B=[],G=[],P=[],POT=[],SOC=[];
+  for(let s=0;s<NS;s++){ L.push(minToHM(s*5)); if(!a.has[s]){ [S,B,G,P,POT,SOC].forEach(x=>x.push(null)); continue; }
+    const x=splitSlot(a,s); S.push(+x.s.toFixed(2)); B.push(+x.b.toFixed(2)); G.push(+x.g.toFixed(2)); P.push(a.prod[s]); POT.push(a.pot?+a.pot[s].toFixed(2):null); SOC.push(a.soc[s]); }
+  const o=chartBase(); o.scales.y.stacked=true; o.scales.y2={position:'right',min:0,max:100,grid:{display:false},ticks:{color:cssv('--muted')}};
+  o.scales.x.ticks.maxTicksLimit=12; o.elements={point:{radius:0}};
+  const area=(lab,data,col)=>({type:'line',label:lab,data,borderColor:col,backgroundColor:col+'AA',fill:true,stack:'s',borderWidth:0});
+  mkChart('dayChart',{type:'line',data:{labels:L,datasets:[
+    area('โซลาร์ตรง kW',S,cssv('--solar')),area('แบต kW',B,cssv('--battery')),area('กริด kW',G,cssv('--buy')),
+    {label:'ผลิต kW',data:P,borderColor:cssv('--solar'),borderWidth:1.5,fill:false,stack:'p',yAxisID:'yP'},
+    {label:'ศักยภาพแดด kW',data:POT,borderColor:cssv('--faint'),borderDash:[5,4],borderWidth:1.2,fill:false,stack:'q',yAxisID:'yP'},
+    {label:'SOC %',data:SOC,borderColor:cssv('--battery'),borderDash:[2,3],borderWidth:1.5,fill:false,yAxisID:'y2'}]},
+    options:{...o,scales:{...o.scales,yP:{display:false,beginAtZero:true,stacked:false}}}});
+  // ให้แกน yP ใช้สเกลเดียวกับ y
+  const ch=charts.dayChart; if(ch){ const mx=Math.max(...P.filter(v=>v!=null),...POT.filter(v=>v!=null),...S.map((v,i)=>(v||0)+(B[i]||0)+(G[i]||0)))*1.05;
+    ch.options.scales.y.max=Math.ceil(mx); ch.options.scales.yP.max=Math.ceil(mx); ch.update(); }
+  const nIdx=[]; for(let s=0;s<NS;s++) if(a.has[s]&&(s*5<6*60||s*5>=18*60)) nIdx.push(s);
+  const nightImp=nIdx.reduce((x,s)=>x+a.imp[s]*H,0);
+  $('dayNotes').innerHTML=ins([
+    ['info','☀',`แดด ${minToHM(d.sunStart)}–${minToHM(d.sunEnd)} · คุณภาพแดด ${d.q!=null?pct(d.q)+'% ของวันแดดดี':'—'} · SOC ${f0(d.socMin)}→${f0(d.socMax)}%`],
+    [nightImp>2?'warn':'info','🌙',`ซื้อไฟช่วงกลางคืน (18–06 น.) ${f1(nightImp)} kWh${d.socMin<=(+cfg.backup.floor||8)+3?' — แบตลงถึงจุดตัด':''}`],
+    ...(d.curt>0.5?[['warn','✂',`ถูกหรี่ ${f1(d.curt)} kWh นาน ${f1(d.curtH)} ชม. (เส้นประสูงกว่าเส้นผลิตตอน SOC เต็ม)`]]:[]),
+    ...(d.nf?[['info','🧩',`มี ${d.nf} ช่วง 5 นาทีที่เติมด้วยค่าประมาณ (ไม่แสดงในกราฟ)`]]:[])]);
+}
+
+/* ============================== MONEY ============================== */
+function renderMoney(){
+  const cal=M.calib;
+  $('calKpis').innerHTML=kpiCards([
+    {l:'บิลที่ใช้ปรับเทียบ',v:cal.n,u:'ใบ',s:cal.items.map(x=>`${thMonth(x.m)} ${sgn(x.d)}%`).join(' · ')||'ยังไม่มีบิลที่ข้อมูลครบ'},
+    {l:'ระบบวัดเทียบมิเตอร์ PEA',v:cal.raw?sgn((1/cal.raw-1)*100):'—',u:'%',col:cal.ok?'var(--good)':'var(--warn)',s:cal.ok?`ใช้ตัวคูณ ×${cal.k.toFixed(3)} กับรอบที่ยังไม่มีบิล`:'ต่างเกิน ±15% ไม่ใช้ปรับเทียบ ตรวจข้อมูล'},
+    {l:'ความคลาดเคลื่อนรายบิล',v:cal.items.length?f1(Math.max(...cal.items.map(x=>Math.abs(x.d)))):'—',u:'% สูงสุด',s:'เวลาอ่านมิเตอร์ '+cfg.billReadTime+' (ปรับได้ในตั้งค่า)'}]);
+  const today=todayISO();
+  $('cycleBody').innerHTML=M.cycles.slice().reverse().map(c=>{
+    const st=c.bill?'<span class="tag ok">บิลจริง</span>':c.status==='current'?'<span class="tag info">กำลังเดิน</span>':c.exact?'<span class="tag ok">บิลก่อนติดตั้ง</span>':c.status==='partial'?'<span class="tag warn">ไม่ครบรอบ</span>':'<span class="tag warn">รอบิล</span>';
+    const d=c.diffPct; const dcol=d==null?'':Math.abs(d)<=5?'neg':'pos';
+    return `<tr><td>${c.label}<div class="k-sub">บิล ${thMonth(c.billMonth)} · ${c.nDays} วัน</div></td>
+      <td class="mono">${c.bill?f1(c.bill.units):c.pre?f1(c.pre.units):'—'}</td><td class="mono">${f1(c.status==='current'?c.unitsSoFar:c.unitsSys)}${c.status==='current'?'<div class="k-sub">คาดทั้งรอบ '+f1(c.units)+'</div>':''}</td>
+      <td class="mono ${dcol}">${d==null?'—':sgn(d)+'%'}</td><td class="mono">${f0(c.cons)}</td>
+      <td class="mono">${f2(c.actual)}</td><td class="mono">${f0(c.noSolar)}</td><td class="mono neg">${f0(c.saving)}</td>
+      <td class="mono">${pct(c.status==='current'?c.w.n/Math.max(1,c.w.slots-c.w.out):c.w.measured)}%</td><td style="text-align:left">${st}</td></tr>`; }).join('');
+  $('cycleNote').innerHTML=`หน้าต่างแต่ละรอบ = [วันอ่านครั้งก่อน ${cfg.billReadTime}, วันอ่านรอบนี้ ${cfg.billReadTime}) ระดับ 5 นาที · ช่วงหมุนย้อน (ถึง ${thd(cfg.netMeterUntil)}) นับหน่วย = ซื้อ − ขายคืน · ช่องข้อมูลขาดเติมด้วยมัธยฐานช่วงเวลาเดียวกันจากวันใกล้เคียง · "ถ้าไม่มีโซลาร์" = การใช้ไฟรวมที่ระบบวัด ผ่านอัตราขั้นบันไดของเดือนบิลนั้น`;
+  renderBillList(); renderROIDetail(); renderPre(); renderTOU();
+}
+function renderBillList(){
+  const bills=(cfg.billActuals||[]).slice().sort((a,b)=>a.meterDate<b.meterDate?1:-1);
+  $('billBody').innerHTML=bills.map(b=>{ const f=billFor(b.units,b.meterDate), ok=b.total==null||Math.abs(f-b.total)<=0.02;
+    return `<tr><td>${thMonth(b.billMonth)}</td><td>${thd(b.meterDate)}</td><td class="mono">${f2(b.units)}</td><td class="mono">${b.total!=null?f2(b.total):'—'}</td><td class="mono">${b.ftRate??'—'}</td>
+      <td>${b.total==null?'<span class="tag warn">ไม่มียอด</span>':ok?'<span class="tag ok">ตรงสูตร</span>':`<span class="tag bad">สูตรได้ ${f2(f)}</span>`}</td>
+      <td style="text-align:left;white-space:normal;min-width:180px" class="k-sub">${esc(b.notes||'')}</td>
+      <td><button class="btn tiny" data-bedit="${b.id}">แก้</button> <button class="xbtn" data-bdel="${b.id}">✕</button></td></tr>`; }).join('');
+}
+function billFormCheck(){
+  const d=$('bDate').value, u=parseFloat($('bUnits').value), t=parseFloat($('bTotal').value), ft=parseFloat($('bFt').value);
+  if(!d||!isFinite(u)){ $('bCheck').textContent=''; return; }
+  const save=cfg.ftEras; if(isFinite(ft)) cfg.ftEras=[...save,{from:d.slice(0,7),ft,src:'tmp'}];
+  const bd=billBreakdown(u,d); cfg.ftEras=save;
+  $('bCheck').innerHTML=`สูตรค่าไฟ (เดือนบิล ${thMonth(d.slice(0,7))}): พลังงาน ${f2(bd.energy)} + บริการ ${f2(bd.service)} + Ft ${f2(bd.ft)} + VAT ${f2(bd.vatAmt)} = <b>${f2(bd.total)} ฿</b>`+
+    (isFinite(t)?(Math.abs(bd.total-t)<=0.02?' <span class="tag ok">ตรงกับยอดในบิล</span>':` <span class="tag bad">ต่างจากบิล ${f2(t-bd.total)} ฿</span> ตรวจตัวเลขที่กรอก หรืออัตรา/Ft ของยุคนี้ในตั้งค่า`):'');
+}
+function saveBill(){
+  const d=$('bDate').value, u=parseFloat($('bUnits').value), t=parseFloat($('bTotal').value), ft=parseFloat($('bFt').value);
+  if(!d||!isFinite(u)){ toast('กรอกวันที่อ่านหน่วยและหน่วยที่ใช้','err'); return; }
+  const id=$('bEditId').value; let rec=(cfg.billActuals||[]).find(x=>id?x.id===id:x.meterDate===d);
+  const prev=(cfg.billActuals||[]).filter(x=>x.meterDate<d&&x!==rec).map(x=>x.meterDate).sort().pop()||'';
+  const data={billMonth:d.slice(0,7),meterDate:d,prevMeterDate:prev,units:u,total:isFinite(t)?t:null,ftRate:isFinite(ft)?ft:null,notes:$('bNote').value.trim(),source:'manual'};
+  if(rec){ Object.assign(rec,data); logAudit('bill_update',`${thMonth(data.billMonth)} ${u} หน่วย ${data.total??'-'} ฿`); }
+  else{ rec={id:'bill_'+Date.now(),...data}; cfg.billActuals.push(rec); logAudit('bill_add',`${thMonth(data.billMonth)} ${u} หน่วย ${data.total??'-'} ฿`); }
+  if(isFinite(ft)){ const e=cfg.ftEras.find(x=>x.from===data.billMonth); if(e){ e.ft=ft; e.src='bill'; } else cfg.ftEras.push({from:data.billMonth,ft,src:'bill'}); }
+  clearBillForm(); recompute(); saveState(); render(); toast(`บันทึกบิล ${thMonth(data.billMonth)} แล้ว`,'ok');
+}
+function clearBillForm(){ ['bEditId','bDate','bUnits','bTotal','bFt','bNote'].forEach(i=>$(i).value=''); $('bCheck').textContent=''; }
+function renderROIDetail(){
+  const r=computeROI(), box=$('roiDetail'), today=todayISO();
+  if(!r){ box.innerHTML='<div class="k-sub">ต้องมีรอบบิลที่ข้อมูลครบอย่างน้อย 1 รอบ</div>'; return; }
+  $('roiCnt').textContent=`IRR ${r.irr!=null?(r.irr*100).toFixed(1):'—'}% · คืนทุน ${r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปี':'—'}`;
+  const sens=[0,2,4].map(e=>[0.85,1,1.15].map(f=>{ const x=computeROI({esc:e,saveFactor:f}); return x&&x.irr!=null?(x.irr*100).toFixed(1)+'%':'—'; }));
+  const pb=[0,2,4].map(e=>{ const x=computeROI({esc:e}); return x&&x.paybackYears!=null?x.paybackYears.toFixed(1):'—'; });
+  box.innerHTML=`
+    <div class="calc-step">ประหยัดต่อรอบ = ค่าไฟถ้าไม่มีโซลาร์ (ใช้ไฟรวม ${f0(r.meanCons)} kWh) − ค่าไฟจริง (ซื้อ ${f1(r.meanUnits)} kWh) คิดด้วยอัตรา+Ft ปัจจุบัน</div>
+    <div class="calc-step">ฐาน: ${r.base.map(c=>`${thMonth(c.billMonth)} ${f0(c.savingNow)} ฿`).join(' · ')} → เฉลี่ย ${f0(r.monthly)} ฿/เดือน = ${f0(r.annual)} ฿/ปี</div>
+    <div class="calc-step">กระแสเงินรายเดือน ${r.horizon} ปี: ค่าไฟขึ้น ${r.esc}%/ปี · แผงเสื่อม ${cfg.degradation}%/ปี (คิดลดเงินประหยัดตรง ๆ = ค่าระมัดระวัง) · ลงทุน ${f0(r.inv)} ฿ → IRR ${r.irr!=null?(r.irr*100).toFixed(1):'—'}%/ปี</div>
+    <div class="calc-step">ประหยัดได้จริงแล้วตั้งแต่ ${thd(r.inst)}: ${f0(r.realized)} ฿ (บิลจริงเมื่อมี) · ที่เหลือ ${f0(Math.max(0,r.inv-r.realized))} ฿ → คืนทุน ${r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปีนับจากเริ่มใช้ ('+thMonth(r.payDate)+')':'—'}</div>
+    <div class="section-title" style="font-size:14px;margin:14px 0 8px">ความอ่อนไหวของ IRR ${r.horizon} ปี</div>
+    <div class="tablewrap"><table class="compact"><thead><tr><th>ค่าไฟขึ้น/ปี</th><th>ประหยัด −15%</th><th>ตามฐาน</th><th>ประหยัด +15%</th><th>คืนทุน (ปี)</th></tr></thead><tbody>
+      ${[0,2,4].map((e,i)=>`<tr><td class="mono">${e}%</td>${sens[i].map(v=>`<td class="mono">${v}</td>`).join('')}<td class="mono">${pb[i]}</td></tr>`).join('')}</tbody></table></div>
+    <div class="insights">${ins([
+      r.seasonal?['good','✓','ปรับฤดูกาลจากประวัติก่อนติดโซลาร์ครบ 12 เดือนแล้ว']:['warn','!',`ฐานยังมีแค่ ${r.base.length} รอบ (ช่วงร้อน/ฝน) ยังไม่ปรับฤดูกาล — เดือน ต.ค.–ก.พ. บ้านนี้เคยใช้ไฟน้อยกว่า ค่าจริงอาจต่ำกว่านี้ ดูคอลัมน์ "ประหยัด −15%" เป็นกรณีระมัดระวัง · ตัวเลขจะนิ่งเมื่อข้อมูลครบ 12 รอบ หรือกรอกประวัติก่อนติดตั้งครบ 12 เดือน`],
+      ...(tariffOn(today).verified?[]:[['warn','!',`อัตรา "${esc(tariffOn(today).label)}" ยังไม่ยืนยันกับบิลจริง — เมื่อได้บิล ก.ย. 2569 ให้กรอกเพื่อให้แอปตรวจสูตร`]]),
+      ...(ftVerified(today)?[]:[['warn','!',`Ft ปัจจุบัน ${ftOn(today)} ใช้ค่าล่าสุดจากบิล อาจเปลี่ยนในรอบ ก.ย.–ธ.ค.`]])])}</div>`;
+}
+function renderPre(){
+  const pre=(cfg.preSolar||[]).slice().sort((a,b)=>a.date<b.date?-1:1), ok=pre.filter(p=>!p.partial);
+  const avg=ok.length?ok.reduce((s,p)=>s+(+p.units),0)/ok.length:0;
+  $('preCnt').textContent=`${pre.length} รอบ · เฉลี่ย ${f0(avg)} kWh/รอบ`;
+  $('preList').innerHTML=`<div class="tablewrap"><table class="compact"><thead><tr><th>อ่านหน่วย</th><th>หน่วย</th><th>ค่าไฟตามอัตราปัจจุบัน ฿</th><th></th></tr></thead><tbody>${pre.map((p,i)=>`<tr><td>${thd(p.date)}${p.partial?' <span class="tag warn">มีโซลาร์บางส่วน</span>':''}</td><td class="mono">${f0(p.units)}</td><td class="mono">${f0(billFor(p.units,todayISO()))}</td><td><button class="xbtn" data-pdel="${p.date}">✕</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+function renderTOU(){
+  const rows=M.cycles.filter(c=>c.status==='complete'&&c.start>=eraStart());
+  ['t_peak','t_off','t_svc','t_meter'].forEach(fillInput);
+  const today=todayISO();
+  const R=rows.map(c=>{ const k=M.calib.k, pk=c.w.peak*k, op=c.w.offpeak*k; return {c,pk,op,normal:billFor(pk+op,today),tou:billTOU(pk,op,today)}; });
+  $('touBody').innerHTML=R.map(x=>`<tr><td>${x.c.label}</td><td class="mono">${f1(x.pk+x.op)}</td><td class="mono">${f1(x.pk)}</td><td class="mono">${f1(x.op)}</td><td class="mono">${f0(x.normal)}</td><td class="mono">${f0(x.tou)}</td><td class="mono ${x.normal-x.tou>0?'neg':'pos'}">${f0(x.normal-x.tou)}</td></tr>`).join('');
+  if(!R.length){ $('touNotes').innerHTML=''; return; }
+  const d=R.reduce((s,x)=>s+x.normal-x.tou,0)/R.length*12, offPct=R.reduce((s,x)=>s+x.op,0)/Math.max(1e-9,R.reduce((s,x)=>s+x.pk+x.op,0))*100;
+  $('touNotes').innerHTML=ins([[d>0?'good':'warn','฿',`เปลี่ยนเป็น TOU ${d>0?'ประหยัด':'แพงขึ้น'} ${f0(Math.abs(d))} ฿/ปี · ไฟที่ซื้อตก off-peak ${f0(offPct)}% (เสาร์-อาทิตย์ทั้งวัน + จ-ศ นอก ${cfg.tou.peakStart}–${cfg.tou.peakEnd})${d>0?` · คืนค่ามิเตอร์ ${f1(cfg.tou.meterCost/d)} ปี`:''}`],
+    ['info','!','อัตรา TOU ในช่องด้านบนยังไม่ได้ยืนยันกับประกาศ PEA ล่าสุด ไม่รวมวันหยุดนักขัตฤกษ์ (ซึ่งเป็น off-peak)']]);
+}
+
+/* ============================== SYSTEM ============================== */
+function renderSystem(){
+  const b=battStats();
+  $('battSub').textContent=`Dyness PowerBrick Pro ${cfg.battKWh} kWh · DoD ${cfg.battDoD}% · รับประกัน ≥8,000 รอบ/10 ปี`;
+  if(b){ $('battKpis').innerHTML=kpiCards([
+      {l:'ความจุใช้งานตาม datasheet',dot:'d-batt',v:f1(b.usable),u:'kWh',s:`${cfg.battKWh} × DoD ${cfg.battDoD}%`},
+      {l:'วัดจริง: 1% SOC จ่ายโหลดได้',dot:'d-batt',v:b.K?(b.K.k*100).toFixed(1):'—',u:'kWh/100%',s:b.K?`จาก ${b.K.n} ช่วงกลางคืน (ฝั่ง AC หลังหักการสูญเสีย)`:'ยังวัดไม่ได้'},
+      {l:'ประสิทธิภาพไป-กลับ',v:b.rte?pct(b.rte):'—',u:'%',s:`จ่าย ${f0(b.dis)} / ชาร์จ ${f0(b.chg)} kWh (${b.n} วัน)`},
+      {l:'รอบการใช้งาน',v:b.cycPerDay.toFixed(2),u:'รอบ/วัน',s:b.years8000?`8,000 รอบ ≈ ${f1(b.years8000)} ปี (เกินประกัน 10 ปี)`:''},
+      {l:'คืนที่แบตลงถึงจุดตัด',v:b.lowNights,u:`/ ${b.n}`,s:'SOC ต่ำสุดของวัน ≤ จุดตัด+3%'},
+      {l:'ซื้อไฟกลางคืน',dot:'d-buy',v:f1(b.nightImpDay),u:'kWh/วัน',s:'18:00–06:00'}]);
+    $('battNotes').innerHTML=ins([
+      ['info','🔋',`วัดได้ ${b.K?(b.K.k*100).toFixed(1):'—'} kWh ต่อ 100% SOC เทียบ datasheet ${f1(b.usable)} kWh ใช้งานได้ — ส่วนต่างคือการสูญเสียตอนแปลงไฟจากแบตเป็น AC ไม่ใช่แบตเสื่อม (ควรเฝ้าดูค่านี้ทุกไตรมาส ถ้าลดลงต่อเนื่องคือสัญญาณเสื่อม)`],
+      [b.lowNights>b.n/3?'warn':'info','🌙',`แบตหมดก่อนเช้า ${b.lowNights} จาก ${b.n} คืน → ซื้อไฟกลางคืนเฉลี่ย ${f1(b.nightImpDay)} kWh/วัน · ตัวเลือกคือย้ายโหลดกลางคืน (EV) มากลางวัน หรือเพิ่มแบต (ดูตารางด้านล่าง)`]]); }
+  // curtailment
+  const gd=goodDays(M.days).filter(d=>!cfg.pvChangeDate||d.dayKey>=cfg.pvChangeDate);
+  if(gd.length){ const n=gd.length, curt=gd.reduce((s,d)=>s+d.curt,0)/n, pot=gd.reduce((s,d)=>s+d.pot,0)/n, h=gd.reduce((s,d)=>s+d.curtH,0)/n;
+    const byM={}; gd.forEach(d=>{ const m=d.dayKey.slice(0,7); (byM[m]=byM[m]||{c:0,n:0}); byM[m].c+=d.curt; byM[m].n++; });
+    const top=gd.slice().sort((a,b)=>b.curt-a.curt).slice(0,5), r=computeROI(), mr=marginalRate(r?r.meanUnits:80,todayISO());
+    $('curtKpis').innerHTML=kpiCards([
+      {l:'ถูกหรี่ทิ้งเฉลี่ย',dot:'d-loss',v:f1(curt),u:'kWh/วัน',s:`นาน ${f1(h)} ชม./วัน · ${n} วัน (ยุค ${cfg.pvAfter} kWp)`},
+      {l:'ต่อปี',dot:'d-loss',v:f0(curt*365),u:'kWh',s:`${f1(curt/pot*100)}% ของศักยภาพแดด`},
+      {l:'มูลค่าสูงสุดถ้าย้ายโหลดมาใช้ได้',dot:'d-save',v:f0(Math.min(curt*365,(r?r.meanUnits*12:curt*365))*mr),u:'฿/ปี',s:`จำกัดไม่เกินไฟที่ซื้อจริง ${f0(r?r.meanUnits*12:0)} kWh/ปี × ${f2(mr)} ฿/หน่วย (รวม Ft+VAT)`},
+      {l:'PV : อินเวอร์เตอร์',v:(cfg.pvAfter/cfg.invAC).toFixed(2),u:': 1',s:`PV เข้าได้สูงสุด ${cfg.pvMaxDC} kW (datasheet)`}]);
+    $('curtNotes').innerHTML=ins([
+      ['info','✂',`ไฟที่ถูกหรี่ = ศักยภาพแดดของวันนั้น − ที่ผลิตจริง เฉพาะช่วง SOC ≥ ${cfg.socFull}% และแบตหยุดรับ · ไม่ใช่อินเวอร์เตอร์ตัน (ข้อมูลผลิตได้ถึง 9.1 kW เกินพิกัด AC 6 kW เพราะ PV ชาร์จแบตทางฝั่ง DC)`],
+      ['info','📅','เฉลี่ยรายเดือน (kWh/วัน): '+Object.keys(byM).sort().map(m=>`${thMonth(m)} ${f1(byM[m].c/byM[m].n)}`).join(' · ')],
+      ['info','🔝','วันที่ถูกหรี่มากสุด: '+top.map(d=>`${thd(d.dayKey)} ${f1(d.curt)}`).join(' · ')]]); }
+  // EV + batt2
+  ['ev_km','ev_eff','ev_kw','b2_price','b2_rt'].forEach(fillInput); renderSched();
+  const t=batt2Table();
+  if(t){ const b0=t.base;
+    $('evKpis').innerHTML=kpiCards([
+      {l:'EV ต้องใช้',dot:'d-load',v:f1(b0.needWk),u:'kWh/สัปดาห์',s:`${cfg.ev.targetKmWeek} กม. × ${cfg.ev.kwhPer100} kWh/100 กม.`},
+      {l:'ชาร์จจากแดดได้ (ตามตาราง)',dot:'d-solar',v:f1(b0.evDirectWk),u:'kWh/สัปดาห์',s:`ครอบคลุม ${f0(b0.coverPct)}% ของเป้า`},
+      {l:'ไฟเหลือที่ยังไม่ถูกใช้',dot:'d-loss',v:f1(b0.wastedWk),u:'kWh/สัปดาห์',s:'นอกเวลาชาร์จ / เกินกำลังชาร์จ'},
+      {l:'ยังต้องซื้อกริดให้ EV',dot:'d-buy',v:f1(b0.gridNeedWk),u:'kWh/สัปดาห์'}]);
+    $('b2Body').innerHTML=[{C:0,price:0,sim:b0,saveYr:0,payback:null},...t.rows].map(x=>`<tr><td class="mono">${x.C?x.C+' kWh':'ไม่เพิ่ม'}</td><td class="mono">${f0(x.price)}</td><td class="mono">${f1(x.sim.totalWk)}</td><td class="mono">${f0(x.sim.coverPct)}%</td><td class="mono">${f1(x.sim.gridNeedWk)}</td><td class="mono">${x.C?f0(x.saveYr):'—'}</td><td class="mono">${x.payback?x.payback.toFixed(1)+' ปี':'—'}</td></tr>`).join('');
+    const best=t.rows.filter(x=>x.payback).sort((a,b)=>a.payback-b.payback)[0];
+    $('evNotes').innerHTML=ins([
+      ['info','🚗',`จำลองบนข้อมูลจริง ${b0.nDays} วัน: EV ได้ไฟก่อนแบตลูก 2 ในช่วงเวลาชาร์จ · แบตลูก 2 เก็บไฟที่เหลือไปจ่ายกลางคืน (ไป-กลับ ${pct(cfg.batt2.rtEff)}%) · เงินประหยัดคิดที่อัตราปัจจุบันบนการซื้อไฟบ้าน ${f0(t.house)} kWh/รอบ`],
+      best?[best.payback<=10?'good':'warn','🔋',`แบตเพิ่มที่คืนทุนเร็วสุดคือ ${best.C} kWh (${best.payback.toFixed(1)} ปี) — ${best.payback<=10?'อยู่ในอายุประกัน 10 ปี':'เกินอายุประกัน 10 ปี ยังไม่คุ้ม'} · ทางที่ไม่ต้องลงทุนคือเพิ่มวันชาร์จ EV กลางวันในตาราง`]:['info','🔋','ยังไม่มีขนาดแบตที่คืนทุนได้']]); }
+  renderBackup(); renderElec();
+}
+function renderSched(){
+  const days=['จ','อ','พ','พฤ','ศ','ส','อา'], s=cfg.ev.sched||{};
+  $('schedEditor').innerHTML=days.map((d,i)=>{ const w=s[String(i)]; return `<div class="field" style="width:132px"><label>${d}</label>
+    <input type="time" data-sd="${i}" data-se="0" value="${w?w[0]:''}" style="padding:5px 6px;font-size:13px"><input type="time" data-sd="${i}" data-se="1" value="${w?w[1]:''}" style="padding:5px 6px;font-size:13px"></div>`; }).join('');
+}
+function renderBackup(){
+  ['bk_hours','bk_from','bk_to','bk_floor','bk_margin'].forEach(fillInput);
+  const bk=cfg.backup, K=backupK(), N=backupNeeds(+bk.hours||3,bk.from,bk.to);
+  if(!K||!N.all){ $('bkKpis').innerHTML=''; $('bkNotes').innerHTML=ins([['info','i',N.tooLong?'ชั่วโมงยาวกว่าช่วงเวลาที่เลือก':'ข้อมูลยังไม่พอ']]); return; }
+  const k=K.k, floor=+bk.floor||0, mg=+bk.margin||0, socOf=e=>Math.min(100,Math.ceil(floor+e/k+mg));
+  $('bkKpis').innerHTML=kpiCards([
+    {l:`ตั้ง SOC ขั้นต่ำ (ครอบคลุมทุกคืน)`,dot:'d-batt',v:socOf(N.all.max),u:'%',s:`ใช้ไฟหนักสุด ${bk.hours} ชม. = ${f2(N.all.max)} kWh + เผื่อ ${mg}%`},
+    {l:'ยอมรับคืนหนักสุด 5%',dot:'d-batt',v:socOf(N.all.p95),u:'%',s:`p95 = ${f2(N.all.p95)} kWh`},
+    {l:'คืนปกติ',v:socOf(N.all.med),u:'%',s:`มัธยฐาน ${f2(N.all.med)} kWh`}]);
+  $('bkNotes').innerHTML=ins([['info','📐',`คิดจาก ${N.all.n} ช่วงจริงในเวลา ${bk.from}–${bk.to} · 1% SOC = ${k.toFixed(3)} kWh (วัดจากข้อมูล) · ตั้งเฉพาะคืนที่เสี่ยงไฟดับ ล็อกถาวรจะต้องซื้อไฟเพิ่ม`]]);
+}
+function renderElec(){
+  ['e_In','e_size','e_method','e_temp','e_len','e_evA'].forEach(fillInput);
+  const e=cfg.elec, V=+e.vFallback||230, amp=ampacity(); let pk={v:0,k:''}, pkL=0; const band=BANDS.map(()=>[0,0]);
+  for(const k of M.keys){ const r=store[k], I=Math.max(r.grid,0)*1000/V, IL=r.cons*1000/V; if(I>pk.v) pk={v:I,k}; if(IL>pkL) pkL=IL;
+    const bi=BANDS.findIndex(([lo,hi])=>I>=lo&&I<hi), bl=BANDS.findIndex(([lo,hi])=>IL>=lo&&IL<hi); if(bi>=0) band[bi][0]+=1/12; if(bl>=0) band[bl][1]+=1/12; }
+  const util=pk.v/(+e.In)*100, vd=I=>2*(+e.len||0)*I*(R_CABLE[e.size]||1.15)/1000/V*100, evPk=pk.v+(+e.evA||0);
+  $('elecKpis').innerHTML=kpiCards([
+    {l:'กระแสซื้อจากกริดสูงสุด',dot:'d-buy',v:f1(pk.v),u:'A',s:`${pk.k} · ${f1(util)}% ของเบรกเกอร์ ${e.In} A`},
+    {l:'โหลดบ้านสูงสุด',dot:'d-load',v:f1(pkL),u:'A',s:'โซลาร์+แบตรับไว้ มิเตอร์จึงเห็นน้อยกว่า'},
+    {l:'สายเมนรับได้ (หลังลดพิกัด)',v:f1(amp.iz),u:'A',col:amp.ok?'var(--good)':'var(--bad)',s:amp.ok?'เบรกเกอร์ป้องกันสายได้':`เบรกเกอร์ ${e.In} A > สาย ${f1(amp.iz)} A`},
+    {l:`ถ้าชาร์จ EV ${e.evA} A จากกริดตอนพีค`,v:f1(evPk),u:'A',col:evPk>amp.iz?'var(--bad)':'var(--good)',s:`เหลือ ${f1(Math.min(+e.In,amp.iz)-evPk)} A`}]);
+  $('elecCalc').innerHTML=`<div class="calc-step">Iz = ${amp.base} A (THW ${e.size} ตร.มม. ${e.method==='conduit_air'?'ในท่อ':'ลอยอากาศ'} ฐาน 40°C) × k_temp ${amp.kt} (${e.temp}°C) × k_group ${amp.kg} = <b>${f1(amp.iz)} A</b> · ค่าอ้างอิง ต้องตรวจกับตารางในมาตรฐานการติดตั้งทางไฟฟ้าฯ ฉบับที่ใช้จริง</div>
+    <div class="calc-step">แรงดันตก = 2 × ${e.len} ม. × I × ${R_CABLE[e.size]||1.15} Ω/กม. ÷ ${V} V → ที่พีคจริง ${f2(vd(pk.v))}% · ที่พิกัดเบรกเกอร์ ${f2(vd(+e.In))}%</div>`;
+  const mx=Math.max(...band.flat())||1, lab=([lo,hi])=>lo===0?'< 0.5 A':hi>900?'> 63 A':`${lo}–${hi} A`;
+  $('elecBands').innerHTML=`<div class="tablewrap"><table class="compact"><thead><tr><th>ช่วงกระแส</th><th style="text-align:left">ผ่านมิเตอร์ (ซื้อ)</th><th style="text-align:left">โหลดบ้าน</th></tr></thead><tbody>${BANDS.map((b,i)=>`<tr><td class="mono">${lab(b)}</td>${band[i].map((h,j)=>`<td style="text-align:left;min-width:220px"><div style="display:flex;gap:8px;align-items:center"><div class="band-bar"><i style="width:${h/mx*100}%;background:${j?'var(--load)':'var(--buy)'}"></i></div><span class="mono" style="width:80px;text-align:right">${f1(h)} ชม.</span></div></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  $('elecNotes').innerHTML=ins([
+    ...(!amp.ok?[['bad','!',`จากค่าที่ตั้งไว้ (${e.size} ตร.มม. ${e.temp}°C) เบรกเกอร์ ${e.In} A สูงกว่าพิกัดสายหลังลดค่า ${f1(amp.iz)} A — ให้ช่างไฟที่มีใบอนุญาตยืนยันขนาดสาย/อุณหภูมิจริง และตารางพิกัดตามมาตรฐานฉบับที่ใช้ ก่อนเพิ่มโหลดถาวร เช่น EV charger`]]:[]),
+    ['warn','⏱','ข้อมูลเป็นค่าราย 5 นาที ไม่เห็นกระแสกระชากสั้น ๆ (คอมเพรสเซอร์สตาร์ท) · แปลง kW→A ด้วย 230 V สมมติ (ไฟล์ Deye ไม่มีค่าแรงดัน)']]);
+}
+
+/* ============================== SETTINGS ============================== */
+function getPath(p){ return p.split('.').reduce((o,k)=>o==null?o:o[k],cfg); }
+function setPath(p,v){ const ks=p.split('.'); let o=cfg; ks.slice(0,-1).forEach(k=>o=o[k]=o[k]||{}); o[ks[ks.length-1]]=v; }
+function fillInput(id){ const el=$(id); if(!el||document.activeElement===el) return; const v=getPath(el.dataset.cfg); el.value=v==null?'':v; }
+function renderSettings(){
+  document.querySelectorAll('#pg-settings [data-cfg]').forEach(el=>fillInput(el.id));
+  const n=Object.keys(store).length, bills=(cfg.billActuals||[]).length;
+  $('coverage').textContent=M&&M.days.length?`ข้อมูล 5 นาที ${n.toLocaleString()} จุด · ${M.days.length} วัน (${thd(M.days[0].dayKey)} – ${thd(M.days[M.days.length-1].dayKey)}) · บิล ${bills} ใบ`:`ยังไม่มีข้อมูล 5 นาที · บิล ${bills} ใบ`;
+  $('persistNote').textContent=persistMode==='none'?'เบราว์เซอร์นี้เก็บข้อมูลถาวรไม่ได้ กด "บันทึก backup" ไว้ทุกครั้ง':`ที่เก็บ: ${persistMode==='host'?'window.storage (Claude)':'IndexedDB ของเบราว์เซอร์นี้'} · ล้าง cache/เปลี่ยนเบราว์เซอร์แล้วหาย ให้เก็บไฟล์ backup ไว้`;
+  renderTariffEditor(); renderFtEditor(); renderQuality();
+  $('auditLog').innerHTML=(cfg.auditLog||[]).slice(0,80).map(a=>`<div class="logline"><span class="mono">${a.ts.slice(0,16).replace('T',' ')}</span> · ${esc(a.action)} · ${esc(a.detail)}</div>`).join('')||'<div class="k-sub">—</div>';
+}
+function renderTariffEditor(){
+  $('tariffEditor').innerHTML=(cfg.tariffEras||[]).map((e,ei)=>`<div class="era-card">
+    <div class="row" style="margin-bottom:8px"><div class="field w-md"><label>เริ่มใช้ (เดือนบิล)</label><input type="date" data-era="${ei}" data-ef="from" value="${e.from}"></div>
+      <div class="field" style="flex:1;min-width:170px"><label>ชื่อ</label><input type="text" data-era="${ei}" data-ef="label" value="${esc(e.label||'')}"></div>
+      <div class="field w-sm"><label>ค่าบริการ ฿</label><input type="number" step="0.01" data-era="${ei}" data-ef="service" value="${e.service}"></div>
+      <span class="tag ${e.verified?'ok':'warn'}">${e.verified?'ขั้น 1 + ค่าบริการ ตรงบิลจริง':'ยังไม่ยืนยันกับบิล'}</span></div>
+    ${e.tiers.map((t,ti)=>`<div class="tier-row"><input type="number" placeholder="ถึงหน่วยที่ (ว่าง=ที่เหลือ)" data-era="${ei}" data-tier="${ti}" data-tf="upTo" value="${t.upTo??''}"><input type="number" step="0.0001" data-era="${ei}" data-tier="${ti}" data-tf="rate" value="${t.rate}"><span class="k-sub">฿/หน่วย</span></div>`).join('')}
+  </div>`).join('');
+}
+function renderFtEditor(){
+  $('ftEditor').innerHTML=(cfg.ftEras||[]).slice().sort((a,b)=>a.from<b.from?-1:1).map(f=>`<div class="ft-row"><input type="month" data-ft="${f.from}" data-ff="from" value="${f.from}"><input type="number" step="0.0001" data-ft="${f.from}" data-ff="ft" value="${f.ft}"><span class="tag ${f.src==='bill'?'ok':'warn'}">${f.src==='bill'?'จากบิล':'ค่าที่กรอก'}</span><button class="xbtn" data-ftdel="${f.from}">✕</button></div>`).join('')+
+    `<button class="btn tiny" id="ftAdd">+ เพิ่มยุค Ft</button>`;
+}
+function renderQuality(){
+  if(!M||!M.days.length){ $('qualSummary').textContent=''; $('qualBody').innerHTML=''; return; }
+  const bad=M.days.filter(d=>!d.full||d.suspect||d.nf>0&&d.nf>=6);
+  const fillC=M.days.reduce((s,d)=>s+(d.cons-d.m.cons),0), fillI=M.days.reduce((s,d)=>s+(d.imp-d.m.imp),0);
+  $('qualSummary').innerHTML=`ครบ ${M.days.filter(d=>d.full).length}/${M.days.length} วัน · เติมค่าประมาณรวม ใช้ไฟ ${f1(fillC)} kWh ซื้อกริด ${f1(fillI)} kWh (${f1(fillI/Math.max(1,M.days.reduce((s,d)=>s+d.imp,0))*100)}% ของที่ซื้อทั้งหมด) · วิธีเติม: มัธยฐานของช่วงเวลาเดียวกันจาก ±7 วัน`;
+  const gaps=d=>{ const a=d.a, out=[]; let st=null; for(let s=a.lo;s<=a.hi+1;s++){ const miss=s<=a.hi&&!a.has[s]; if(miss&&st===null) st=s; if(!miss&&st!==null){ out.push(`${minToHM(st*5)}–${s*5>=1440?'24:00':minToHM(s*5)}`); st=null; } } return out.slice(0,3).join(', ')+(out.length>3?' …':''); };
+  $('qualBody').innerHTML=bad.map(d=>`<tr><td>${thd(d.dayKey)}</td><td class="mono">${pct(d.coverage)}%</td><td class="mono" style="white-space:normal">${gaps(d)||'—'}</td>
+    <td class="mono">${f1(d.cons-d.m.cons)} / ${f1(d.imp-d.m.imp)}</td><td class="mono">${f2(d.balMean)} kW</td>
+    <td style="text-align:left" class="k-sub">${d.flat?'โหลดแบนผิดปกติ ':''}${Math.abs(d.balMean)>0.6?'สมดุลพลังงานเพี้ยน ':''}${d.ignored?'ไม่นำมาวิเคราะห์':''}</td>
+    <td><button class="btn tiny" data-ign="${d.dayKey}">${d.ignored?'นำกลับ':'ไม่ใช้วันนี้'}</button></td></tr>`).join('');
+}
+
+/* ============================== REPORT ============================== */
+function reportSVG(pd){
+  const W=900,Hh=220,pl=36,pr=8,pt=8,pb=24,n=pd.length||1,bw=(W-pl-pr)/n, mx=Math.max(5,...pd.map(d=>Math.max(d.prod,d.cons)));
+  const step=mx>40?10:5, top=Math.ceil(mx/step)*step, y=v=>pt+(Hh-pt-pb)*(1-v/top); let g='';
+  for(let v=0;v<=top;v+=step) g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="#e6e6e6"/><text x="${pl-5}" y="${y(v)+4}" font-size="10" text-anchor="end" fill="#777">${v}</text>`;
+  pd.forEach((d,i)=>{ const x=pl+i*bw, w=Math.max(2,bw*0.36);
+    g+=`<rect x="${x+bw*.12}" y="${y(d.prod)}" width="${w}" height="${y(0)-y(d.prod)}" fill="#E0A233"/><rect x="${x+bw*.12+w}" y="${y(d.cons)}" width="${w}" height="${y(0)-y(d.cons)}" fill="#3FA9D0"/>`;
+    if(i%3===0) g+=`<text x="${x+bw/2}" y="${Hh-7}" font-size="10" text-anchor="middle" fill="#777">${+d.dayKey.slice(8)}</text>`; });
+  g+=`<polyline points="${pd.map((d,i)=>`${(pl+i*bw+bw/2).toFixed(1)},${y(d.imp).toFixed(1)}`).join(' ')}" fill="none" stroke="#D23B3B" stroke-width="1.8"/>`;
+  return `<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="กราฟรายวัน">${g}</svg><div class="note"><span style="color:#E0A233">■</span> ผลิต <span style="color:#3FA9D0">■</span> ใช้ <span style="color:#D23B3B">—</span> ซื้อกริด (kWh/วัน)</div>`;
+}
+function renderReport(){
+  const c=curCycle(); if(!c) return; const pd=cycleDays(c), w=c.w, r=computeROI();
+  const box=(l,v,s)=>`<div class="rbox"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s||''}</div></div>`;
+  $('reportDoc').innerHTML=`<h1>รายงานรอบบิล ${thMonth(c.billMonth)}</h1>
+    <div class="rsub">${c.label} (${c.nDays} วัน) · โซลาร์ ${pvKwpOn(c.start)} kWp · อินเวอร์เตอร์ ${cfg.invAC} kW · แบต ${cfg.battKWh} kWh · ${c.status==='current'?'รอบยังไม่จบ ตัวเลขเงินเป็นค่าคาดการณ์':''}</div>
+    <div class="rsec">พลังงาน</div><div class="rgrid">
+      ${box('ผลิต',f1(w.prod)+' kWh')}${box('ใช้ในบ้าน',f1(w.cons)+' kWh','รวม EV')}${box('ซื้อจากกริด',f1(c.status==='current'?c.unitsSoFar:c.units)+' kWh',c.bill?'ตามบิล PEA':'ระบบวัด (ปรับเทียบ)')}${box('ถูกหรี่ทิ้ง',f1(w.curt)+' kWh')}</div>
+    <div class="rsec">เงิน</div><div class="rgrid">
+      ${box('ค่าไฟจริง',f2(c.actual)+' ฿',c.bill?'บิล PEA':c.status==='current'?'คาดการณ์':'ประมาณ')}${box('ถ้าไม่มีโซลาร์',f0(c.noSolar)+' ฿',`ใช้ ${f0(c.cons)} kWh`)}${box('ประหยัดรอบนี้',f0(c.saving)+' ฿')}${box('ประหยัดสะสม',r?f0(r.realized)+' ฿':'—',r&&r.irr!=null?`IRR ${(r.irr*100).toFixed(1)}% · คืนทุน ${r.paybackYears?r.paybackYears.toFixed(1)+' ปี':'—'}`:'')}</div>
+    ${c.bill?`<div class="rsec">บิล PEA เทียบระบบ</div><table><thead><tr><th>รายการ</th><th>บิล PEA</th><th>ระบบวัด</th><th>ต่าง</th></tr></thead><tbody>
+      <tr><td>หน่วย</td><td>${f2(c.bill.units)}</td><td>${f2(c.unitsSys)}</td><td>${c.diffPct!=null?sgn(c.diffPct)+'%':'—'}</td></tr>
+      <tr><td>ยอดเงิน</td><td>${c.bill.total!=null?f2(c.bill.total):'—'}</td><td>${f2(billFor(c.bill.units,c.end))} (สูตร)</td><td>${c.bill.total!=null?f2(c.bill.total-billFor(c.bill.units,c.end)):'—'}</td></tr></tbody></table>`:''}
+    <div class="rsec">รายวัน</div>${reportSVG(pd)}
+    <table><thead><tr><th>วันที่</th><th>ผลิต</th><th>ใช้</th><th>ซื้อ</th><th>ถูกหรี่</th><th>SOC ต่ำ–สูง</th><th>ข้อมูล</th></tr></thead><tbody>
+      ${pd.map(d=>`<tr><td>${thd(d.dayKey)}</td><td>${f1(d.prod)}</td><td>${f1(d.cons)}</td><td>${f1(d.imp)}</td><td>${f1(d.curt)}</td><td>${f0(d.socMin)}–${f0(d.socMax)}%</td><td>${d.full?'ครบ':pct(d.coverage)+'%'}</td></tr>`).join('')}</tbody></table>
+    <div class="note">ข้อมูล Deye ราย 5 นาที · ค่าไฟคำนวณแบบใบแจ้งหนี้ PEA (ปัดทีละบรรทัด) · ช่องข้อมูลขาดเติมด้วยค่ามัธยฐาน · ${APP_VERSION}</div>`;
+}
+
+/* ============================== FILES ============================== */
+function jsonTime(o){ const t=Date.parse(o&&(o.exported_at||(o.meta&&o.meta.exportedAt))||''); return isFinite(t)?t:0; }
+function unionBy(cur,inc,key,prefer){ const m=new Map(); (cur||[]).forEach(x=>m.set(key(x),x)); (inc||[]).forEach(x=>{ const k=key(x), e=m.get(k); m.set(k,e?prefer(e,x):x); }); return [...m.values()]; }
+function importJSONObject(obj){
+  const mergeIn=(src)=>{ if(!src) return;
+    const bills=src.billActuals, aud=src.auditLog, pre=src.preSolar, fts=src.ftEras;
+    const rest={...src}; delete rest.billActuals; delete rest.auditLog; delete rest.preSolar; delete rest.ftEras;
+    mergeCfg(rest);
+    if(Array.isArray(bills)) cfg.billActuals=unionBy(cfg.billActuals,bills.filter(b=>b&&b.meterDate&&b.units!=null&&!b.needsReview),b=>b.meterDate,(e,x)=>(x.updatedAt||'')>(e.updatedAt||'')||e.source==='seed'?x:e);
+    if(Array.isArray(aud)) cfg.auditLog=unionBy(cfg.auditLog,aud,a=>a.ts+a.action+a.detail,e=>e).sort((a,b)=>a.ts<b.ts?1:-1).slice(0,300);
+    if(Array.isArray(pre)&&pre.length) cfg.preSolar=unionBy(cfg.preSolar,pre,p=>p.date,(e,x)=>x);
+    if(Array.isArray(fts)) cfg.ftEras=unionBy(cfg.ftEras,fts,f=>f.from,(e,x)=>(x.src==='bill'||e.src!=='bill')?x:e);
+    migrateCfg(); };
+  if(obj&&obj.format==='solar-eod-full'&&obj.raw){ mergeIn(obj.cfg); const r=fromColumnar(obj.raw);
+    return {ok:true,msg:`ไฟล์ backup ${esc(obj.app_version||'')} · เพิ่ม ${r.add.toLocaleString()} จุด · ซ้ำ ${r.dup.toLocaleString()} จุด`}; }
+  if(obj&&obj.store&&typeof obj.store==='object'){ mergeIn(obj.cfg); let add=0;
+    Object.entries(obj.store).forEach(([k,v])=>{ if(v&&v.dayKey&&v.min!=null&&v.min%5===0){ if(store[k]===undefined) add++; store[k]={dayKey:v.dayKey,min:v.min,prod:+v.prod||0,cons:+v.cons||0,grid:+v.grid||0,batt:+v.batt||0,soc:+v.soc||0}; } });
+    return {ok:true,msg:`ไฟล์สำรองรุ่นเก่า · เพิ่ม ${add.toLocaleString()} จุด`}; }
+  return {ok:false,msg:'ไม่รู้จักโครงสร้างไฟล์ JSON นี้ (รับไฟล์ backup จาก v9–v11)'};
+}
+async function handleFiles(files){
+  files=[...(files||[])]; if(!files.length) return;
+  const jsons=files.filter(f=>/\.json$/i.test(f.name)), xl=files.filter(f=>/\.(xlsx|xls|csv)$/i.test(f.name)), other=files.filter(f=>!jsons.includes(f)&&!xl.includes(f));
+  const msgs=[]; let bad=false;
+  const parsed=[]; for(const f of jsons){ try{ toast(`กำลังอ่าน ${esc(f.name)}…`,'ok'); parsed.push({f,o:JSON.parse(await f.text())}); }catch(e){ bad=true; msgs.push(`${esc(f.name)}: อ่านไม่ได้`); } }
+  parsed.sort((a,b)=>jsonTime(a.o)-jsonTime(b.o));
+  for(const {f,o} of parsed){ const r=importJSONObject(o); msgs.push(`${esc(f.name)}: ${r.msg}`); if(!r.ok) bad=true; }
+  if(xl.length){ if(typeof XLSX==='undefined'){ msgs.push('โหลดไลบรารีอ่าน Excel ไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วรีเฟรช'); bad=true; }
+    else{ toast('กำลังอ่าน Excel…','ok'); const r=await ingestExcel(xl); msgs.push(`Excel ${r.ok} ไฟล์ · เพิ่ม ${r.added.toLocaleString()} จุด · ซ้ำ ${r.dup.toLocaleString()}`);
+      if(r.bad.length){ bad=true; msgs.push('ไม่ใช่ไฟล์ราย 5 นาทีของ Deye: '+r.bad.map(esc).join(', ')); } logAudit('import_excel',`${r.ok} ไฟล์ +${r.added} จุด`); } }
+  if(other.length){ bad=true; msgs.push('ไม่รองรับ: '+other.map(f=>esc(f.name)).join(', ')+' (ภาพบิลให้กรอก 4 ช่องในหน้าบิล)'); }
+  recompute(); await saveState(); render();
+  toast(msgs.join(' · ')+(persistMode==='none'?' · เบราว์เซอร์นี้เก็บถาวรไม่ได้ ให้กดบันทึก backup':''),bad?'warn':'ok');
+}
+function buildSummary(){
+  const r=computeROI(), b=battStats();
+  return {readme:'สรุปจาก Solar EOD Analyzer v11 · kWh · รอบบิลตามวันอ่านมิเตอร์จริง · units = หน่วยที่มิเตอร์ PEA นับ (บิลจริงเมื่อมี มิฉะนั้นระบบวัด×ตัวปรับเทียบ)',
+    calibration:M.calib,
+    cycles:M.cycles.map(c=>({start:c.start,end:c.end,bill_month:c.billMonth,status:c.status,bill_units:c.bill?+c.bill.units:null,bill_total:c.bill?c.bill.total:null,
+      sys_units:+c.unitsSys.toFixed(2),units:+c.units.toFixed(2),cons:+c.cons.toFixed(1),prod:+c.w.prod.toFixed(1),curtailed:+c.w.curt.toFixed(1),
+      actual_THB:+c.actual.toFixed(2),no_solar_THB:+c.noSolar.toFixed(2),saving_THB:+c.saving.toFixed(2),measured_pct:Math.round(c.w.measured*100)})),
+    roi:r&&{investment:r.inv,annual_saving_THB:Math.round(r.annual),irr_pct:r.irr!=null?+(r.irr*100).toFixed(2):null,payback_years:r.paybackYears!=null?+r.paybackYears.toFixed(2):null,
+      realized_THB:Math.round(r.realized),horizon_years:r.horizon,escalation_pct:r.esc,seasonal_adjusted:r.seasonal,base_cycles:r.base.map(c=>c.billMonth)},
+    battery:b&&{usable_kWh_datasheet:b.usable,measured_kWh_per_100pct:b.K?+(b.K.k*100).toFixed(2):null,round_trip:b.rte!=null?+b.rte.toFixed(3):null,cycles_per_day:+b.cycPerDay.toFixed(3),loss_kWh_day:+b.lossDay.toFixed(2)},
+    daily:M.days.map(d=>({date:d.dayKey,coverage_pct:pct(d.coverage),prod:+d.prod.toFixed(2),cons:+d.cons.toFixed(2),imp:+d.imp.toFixed(2),exp:+d.exp.toFixed(2),
+      chg:+d.chg.toFixed(2),dis:+d.dis.toFixed(2),curtailed:+d.curt.toFixed(2),potential:+d.pot.toFixed(2),soc_min:d.socMin,soc_max:d.socMax,imputed_slots:d.nf,suspect:d.suspect}))};
+}
+function exportFull(){
+  try{ let summary=null,err=null; try{ if(M&&M.days.length) summary=buildSummary(); }catch(e){ err=String(e.message||e); }
+    const raw=toColumnar(), obj={format:'solar-eod-full',format_version:1,app:'Solar EOD Analyzer',app_version:APP_VERSION,exported_at:new Date().toISOString(),
+      readme:'raw = ข้อมูลดิบทุก 5 นาที (columnar) หน่วย kW, SOC % · Grid บวก=ซื้อ ลบ=ขาย · Battery บวก=จ่าย ลบ=ชาร์จ · cfg = การตั้งค่าและบิล · summary = ผลคำนวณ · นำกลับเข้าแอปได้โดยตรง',
+      raw_rows:raw.t.length,raw,cfg,summary,summary_error:err};
+    const txt=JSON.stringify(obj), a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+    a.download=`solar-full-${APP_VERSION}-${todayISO()}.json`; a.click();
+    toast(`บันทึก backup แล้ว · ${raw.t.length.toLocaleString()} จุด · ${(txt.length/1048576).toFixed(2)} MB`,'ok'); }
+  catch(e){ toast('บันทึกไม่สำเร็จ: '+esc(e.message||e),'err'); }
+}
+function exportXlsx(){
+  if(typeof XLSX==='undefined'){ toast('ไลบรารี Excel ยังไม่โหลด','err'); return; }
+  const wb=XLSX.utils.book_new(), keys=Object.keys(store).sort();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(keys.map(k=>{ const r=store[k]; return {'Time':k+':00','Production（kW）':r.prod,'Consumption（kW）':r.cons,'Grid（kW）':r.grid,'Battery（kW）':r.batt,'SOC（%）':r.soc}; })),'raw_5min');
+  const s=buildSummary();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(s.daily),'daily');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(s.cycles),'bill_cycles');
+  XLSX.writeFile(wb,`solar-${APP_VERSION}-${todayISO()}.xlsx`,{compression:true}); toast('ส่งออก Excel แล้ว (raw_5min · daily · bill_cycles)','ok');
+}
+
+/* ============================== EVENTS ============================== */
+function setPage(p){ currentPage=p; render(); window.scrollTo(0,0); }
+$('tabbar').addEventListener('click',e=>{ const b=e.target.closest('.tab'); if(b&&!b.disabled) setPage(b.dataset.p); });
+$('cycleSel').addEventListener('change',e=>{ selCycle=e.target.value; selDay=null; render(); });
+['btnAdd','btnAdd2','btnDropPick'].forEach(id=>$(id).addEventListener('click',()=>$('fileInput').click()));
+$('fileInput').addEventListener('change',e=>{ const fs=[...e.target.files]; e.target.value=''; handleFiles(fs); });
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); $('drop').classList.remove('over'); }));
+document.addEventListener('drop',e=>{ const fs=[...(e.dataTransfer?.files||[])]; if(fs.length) handleFiles(fs); });
+['btnExport','btnExport2'].forEach(id=>$(id).addEventListener('click',exportFull));
+$('btnXlsx').addEventListener('click',exportXlsx);
+$('btnReset').addEventListener('click',async()=>{ if(!confirm('ล้างข้อมูล 5 นาทีทั้งหมด? (บิลและการตั้งค่ายังอยู่) แนะนำให้บันทึก backup ก่อน')) return;
+  Object.keys(store).forEach(k=>delete store[k]); logAudit('reset','ล้างข้อมูล 5 นาที'); recompute(); await saveState(); render(); });
+$('btnReport').addEventListener('click',()=>setPage('report'));
+$('rptBack').addEventListener('click',()=>setPage('home'));
+$('rptPrint').addEventListener('click',()=>window.print());
+$('dayBody').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-day]'); if(!tr) return; selDay=tr.dataset.day;
+  document.querySelectorAll('#dayBody tr').forEach(r=>r.classList.toggle('sel',r===tr)); renderDay(); $('dayChart').scrollIntoView({behavior:'smooth',block:'center'}); });
+
+/* input ทุกช่องที่ผูก data-cfg: บันทึก → (สร้าง model ใหม่ถ้าจำเป็น) → แสดงผล */
+let __t=null;
+document.addEventListener('change',e=>{ const el=e.target;
+  if(el.dataset&&el.dataset.cfg){ const v=el.dataset.type==='str'?el.value:(el.value===''?null:+el.value); if(v===null||(typeof v==='number'&&!isFinite(v))) return;
+    setPath(el.dataset.cfg,v); logAudit('setting',`${el.dataset.cfg} = ${v}`);
+    if(el.dataset.rc||/^(billReadTime|readDay|vat|tou\.)/.test(el.dataset.cfg)) recompute(); else if(/^(socFull)/.test(el.dataset.cfg)) recompute();
+    saveState(); render(); return; }
+  if(el.dataset.sd!=null){ const i=el.dataset.sd, ins=document.querySelectorAll(`[data-sd="${i}"]`), a=ins[0].value, b=ins[1].value;
+    cfg.ev.sched[i]=a&&b?[a,b]:null; saveState(); render(); return; }
+  if(el.dataset.era!=null){ const e0=cfg.tariffEras[+el.dataset.era];
+    if(el.dataset.tier!=null){ const t=e0.tiers[+el.dataset.tier]; t[el.dataset.tf]=el.dataset.tf==='upTo'&&el.value===''?null:+el.value; }
+    else e0[el.dataset.ef]=el.dataset.ef==='service'?+el.value:el.value;
+    e0.verified=false; logAudit('tariff_edit',e0.label); recompute(); saveState(); render(); return; }
+  if(el.dataset.ft!=null){ const f=cfg.ftEras.find(x=>x.from===el.dataset.ft); if(!f) return;
+    if(el.dataset.ff==='from') f.from=el.value; else f.ft=+el.value; f.src='manual'; recompute(); saveState(); render(); return; }
+});
+['bDate','bUnits','bTotal','bFt'].forEach(id=>$(id).addEventListener('input',billFormCheck));
+$('bSave').addEventListener('click',saveBill);
+$('bClear').addEventListener('click',clearBillForm);
+document.addEventListener('click',e=>{ const t=e.target;
+  if(t.dataset.bedit){ const b=cfg.billActuals.find(x=>x.id===t.dataset.bedit); if(!b) return;
+    $('bEditId').value=b.id; $('bDate').value=b.meterDate; $('bUnits').value=b.units; $('bTotal').value=b.total??''; $('bFt').value=b.ftRate??''; $('bNote').value=b.notes||''; billFormCheck(); $('bDate').scrollIntoView({behavior:'smooth',block:'center'}); }
+  else if(t.dataset.bdel){ const b=cfg.billActuals.find(x=>x.id===t.dataset.bdel); if(!b||!confirm(`ลบบิล ${thMonth(b.billMonth)}?`)) return;
+    cfg.billActuals=cfg.billActuals.filter(x=>x!==b); logAudit('bill_delete',thMonth(b.billMonth)); recompute(); saveState(); render(); }
+  else if(t.dataset.pdel){ cfg.preSolar=cfg.preSolar.filter(p=>p.date!==t.dataset.pdel); saveState(); render(); }
+  else if(t.dataset.ftdel){ cfg.ftEras=cfg.ftEras.filter(f=>f.from!==t.dataset.ftdel); recompute(); saveState(); render(); }
+  else if(t.dataset.ign){ const d=t.dataset.ign; cfg.ignoreDays=cfg.ignoreDays.includes(d)?cfg.ignoreDays.filter(x=>x!==d):[...cfg.ignoreDays,d]; recompute(); saveState(); render(); }
+  else if(t.id==='ftAdd'){ const m=todayISO().slice(0,7); if(!cfg.ftEras.find(f=>f.from===m)) cfg.ftEras.push({from:m,ft:ftOn(),src:'manual'}); saveState(); render(); }
+});
+$('pAdd').addEventListener('click',()=>{ const d=$('pDate').value, u=+$('pUnits').value; if(!d||!(u>0)){ toast('กรอกวันที่และหน่วย','err'); return; }
+  cfg.preSolar=unionBy(cfg.preSolar,[{date:d,units:u}],p=>p.date,(e,x)=>x); $('pDate').value=''; $('pUnits').value=''; recompute(); saveState(); render(); });
+
+/* theme / zoom */
+function applyTheme(){ const t=cfg.theme||'auto', dark=t==='dark'||(t==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=dark?'dark':'light'; document.querySelectorAll('#themeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.themeSet===t)); }
+function applyZoom(){ document.documentElement.style.setProperty('--zoom',cfg.zoom||1); document.documentElement.classList.toggle('hc',!!cfg.hc); }
+$('themeSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; cfg.theme=b.dataset.themeSet; applyTheme(); saveState(); render(); });
+if(window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{ if(cfg.theme==='auto'){ applyTheme(); render(); } });
+$('fsUp').addEventListener('click',()=>{ cfg.zoom=Math.min(1.6,+(cfg.zoom||1)+0.1); applyZoom(); saveState(); });
+$('fsDown').addEventListener('click',()=>{ cfg.zoom=Math.max(0.8,+(cfg.zoom||1)-0.1); applyZoom(); saveState(); });
+$('hcBtn').addEventListener('click',()=>{ cfg.hc=!cfg.hc; applyZoom(); saveState(); render(); });
+
+/* boot */
+(async function(){
+  await loadState();
+  const notes=migrateCfg();
+  applyTheme(); applyZoom();
+  $('verTag').textContent=APP_VERSION; $('verFoot').textContent=`Solar EOD Analyzer ${APP_VERSION} · ${APP_DATE}`;
+  recompute(); render();
+  if(notes.length){ saveState(); toast('อัปเกรดการตั้งค่าเป็น v11: '+notes.map(esc).join(' · '),'warn'); }
+})();
+</script>
+</body>
+</html>
