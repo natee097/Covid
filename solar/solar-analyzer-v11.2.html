@@ -490,7 +490,7 @@ details.coll .cbody{padding:0 14px 14px}
    ข้อมูลดิบ 5 นาที → เติมช่องว่าง → สรุปรายวัน → รอบบิลตามวันอ่านมิเตอร์จริง
    → ปรับเทียบกับบิล PEA → ความคุ้มค่า · ทุกหน้าอ่านผลจาก M (model) ชุดเดียว
    ====================================================================== */
-const APP_VERSION='v11.1', APP_DATE='2026-10-05';
+const APP_VERSION='v11.2', APP_DATE='2026-10-06';
 const H=5/60, NS=288;
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
@@ -498,16 +498,6 @@ const THM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.
 const store={};            // 'YYYY-MM-DD HH:MM' -> {dayKey,min,prod,cons,grid,batt,soc}
 let M=null;                // model cache (สร้างใหม่ทุกครั้งที่ข้อมูล/ค่าตั้งเปลี่ยน)
 
-/* บิล PEA ที่ผู้ใช้ส่งมา (ตรวจกับสูตรแล้วตรงทุกบรรทัด) — ใส่เป็นข้อมูลตั้งต้น ไม่มีชื่อ/ที่อยู่/เลขผู้ใช้ไฟ */
-const SEED_BILLS=[
-  {id:'seed_2604',billMonth:'2026-04',meterDate:'2026-04-21',prevMeterDate:'2026-03-22',units:40,total:169.54,ftRate:0.0972,source:'seed',notes:''},
-  {id:'seed_2605',billMonth:'2026-05',meterDate:'2026-05-22',prevMeterDate:'2026-04-21',units:78,total:311.01,ftRate:0.1623,source:'seed',notes:'เปลี่ยนมิเตอร์ 8 พ.ค. 2569: เครื่องเก่า 31 + เครื่องใหม่ 47 หน่วย'},
-  {id:'seed_2606',billMonth:'2026-06',meterDate:'2026-06-21',prevMeterDate:'2026-05-22',units:93,total:365.74,ftRate:0.1623,source:'seed',notes:''}
-];
-const SEED_PRE=[
-  {date:'2025-10-20',units:564},{date:'2025-11-19',units:518},{date:'2025-12-22',units:458},
-  {date:'2026-01-22',units:494},{date:'2026-02-19',units:514},{date:'2026-03-22',units:364,partial:true}
-];
 function defaults(){ return {
   schema:11, vat:7,
   tariffEras:[
@@ -518,7 +508,7 @@ function defaults(){ return {
   pvBefore:6.5, pvAfter:9.1, pvChangeDate:'2026-04-16', invAC:6, pvMaxDC:9.6, battKWh:14.336, battDoD:95, socFull:98,
   netMeterUntil:'2026-05-07',
   investment:250000, installDate:'', horizon:10, degradation:0.35, escalation:0,
-  billActuals:SEED_BILLS.map(b=>({...b})), preSolar:SEED_PRE.map(p=>({...p})),
+  billActuals:[], preSolar:[], longRun:{years:25,invYear:12,invCost:0,battYear:12,battCost:0},
   ev:{kwhPer100:17,targetKmWeek:300,chargerKW:3.5,sched:{"0":["09:00","16:00"],"1":null,"2":null,"3":null,"4":["09:00","16:00"],"5":["12:30","16:00"],"6":["12:30","16:00"]}},
   batt2:{sizes:[5,7,10,14],pricePerKWh:5000,rtEff:0.90,maxChargeKW:3.0},
   tou:{peakRate:5.7982,offRate:2.6369,service:24.62,meterCost:3600,peakStart:'09:00',peakEnd:'22:00'},
@@ -585,9 +575,9 @@ function migrateCfg(){
   d.ftEras.forEach(f=>{ const e=cfg.ftEras.find(x=>x.from===f.from); if(!e) cfg.ftEras.push({...f}); else if(e.src!=='bill'){ e.ft=f.ft; e.src='bill'; } });
   cfg.ftEras=cfg.ftEras.filter(f=>!(f.src==='default'&&f.from==='2000-01'&&cfg.ftEras.some(x=>x.from==='2026-01')));
   if(!Array.isArray(cfg.billActuals)) cfg.billActuals=[];
-  SEED_BILLS.forEach(b=>{ if(!cfg.billActuals.some(x=>x.billMonth===b.billMonth&&x.units!=null)) cfg.billActuals.push({...b}); });
   cfg.billActuals=cfg.billActuals.filter(b=>b&&b.meterDate&&b.units!=null&&!b.needsReview);
-  if(!Array.isArray(cfg.preSolar)||!cfg.preSolar.length) cfg.preSolar=d.preSolar;
+  if(!Array.isArray(cfg.preSolar)) cfg.preSolar=[];
+  cfg.longRun=Object.assign({},d.longRun,cfg.longRun||{});
   if((cfg.schema||0)<11){
     cfg.migratedFrom={at:new Date().toISOString(),horizon:+cfg.horizon||25,degradation:+cfg.degradation||0.5,escalation:+cfg.escalation||0,netMeterUntil:cfg.netMeterUntil||'',monthlyRows:Array.isArray(cfg.monthly)?cfg.monthly.length:0};
     if(Array.isArray(cfg.monthly)&&cfg.monthly.length) notes.push(`ลบประวัติรายเดือนแบบกรอกเอง ${cfg.monthly.length} แถว (มีแถวผิด เช่น ปี 1907) — ใช้บิลจริงแทน`);
@@ -595,7 +585,7 @@ function migrateCfg(){
     if(+cfg.horizon!==10){ cfg.horizon=10; notes.push('คิดความคุ้มค่า 10 ปีตามประกันอุปกรณ์'); }
     if(+cfg.degradation===0.5){ cfg.degradation=0.35; notes.push('แผงเสื่อม 0.35%/ปี ตาม datasheet Jinko'); }
     if(!cfg.pvMaxDC) cfg.pvMaxDC=9.6; if(!cfg.battKWh) cfg.battKWh=14.336;
-    cfg.schema=11;
+    cfg.schema=11; cfg.settingsAt=Date.now();
   }
   ['monthly','tiers','service','ft','rate','svc','early','earlyMode','earlyFixed','sellRate','xbattCost','xbattCap','evKm','mixExFlag','lastOcrBatch','rptMonth','settingsFrom'].forEach(k=>delete cfg[k]);
   if(cfg.tou) delete cfg.tou.enabled;
@@ -721,12 +711,17 @@ function buildModel(){
     a.has[s]=1; a.prod[s]=r.prod; a.cons[s]=r.cons; a.imp[s]=Math.max(r.grid,0); a.exp[s]=Math.max(-r.grid,0);
     a.chg[s]=Math.max(-r.batt,0); a.dis[s]=Math.max(r.batt,0); a.soc[s]=r.soc; });
   // เติมช่องว่าง: ค่ามัธยฐานของช่วงเวลาเดียวกันจากวันใกล้เคียง (±7 วัน ขยายถึง ±21 ถ้าไม่พอ)
+  const ign=new Set(cfg.ignoreDays||[]);
+  const pooled=(i,s)=>{ const pool={}; F.forEach(f=>pool[f]=[]);
+    for(let w=1;w<=21;w++){ for(const j of [i-w,i+w]){ const b=j>=0&&j<dks.length?M.D[dks[j]]:null; if(b&&b.has[s]&&!ign.has(b.dk)) F.forEach(f=>pool[f].push(b[f][s])); }
+      if(w>=7&&pool.cons.length>=4) break; }
+    return pool.cons.length?pool:null; };
   dks.forEach((dk,i)=>{ const a=M.D[dk];
     for(let s=a.lo;s<=a.hi;s++){ if(a.has[s]) continue;
-      const pool={}; F.forEach(f=>pool[f]=[]);
-      for(let w=1;w<=21;w++){ for(const j of [i-w,i+w]){ const b=j>=0&&j<dks.length?M.D[dks[j]]:null; if(b&&b.has[s]) F.forEach(f=>pool[f].push(b[f][s])); }
-        if(w>=7&&pool.cons.length>=4) break; }
-      if(pool.cons.length){ F.forEach(f=>a[f][s]=median(pool[f])); a.fill[s]=1; } } });
+      const pool=pooled(i,s); if(pool){ F.forEach(f=>a[f][s]=median(pool[f])); a.fill[s]=1; } }
+    // วันที่สั่ง "ไม่นับ": ค่าจริงยังใช้เทียบมิเตอร์ แต่เก็บค่าแทนจากวันใกล้เคียงไว้ใช้กับ ROI/ค่าเฉลี่ย
+    if(ign.has(dk)){ a.alt={cons:new Float64Array(NS),imp:new Float64Array(NS),exp:new Float64Array(NS)};
+      for(let s=a.lo;s<=a.hi;s++){ const pool=pooled(i,s); ['cons','imp','exp'].forEach(f=>a.alt[f][s]=pool?median(pool[f]):a[f][s]); } } });
   M.days=dks.map(dk=>dayStats(M.D[dk]));
   buildPotential();
   buildCycles();
@@ -800,7 +795,7 @@ function readDates(){
 /* รวมพลังงานในหน้าต่าง [A,Z) ระดับ 5 นาที · หน่วยที่มิเตอร์นับ: ยุคหมุนย้อน = ซื้อ−ขาย (ไม่ติดลบ) */
 function windowSum(A,Z){
   const sA=hm2min(A.slice(11))/5|0, sZ=hm2min(Z.slice(11))/5|0, dA=A.slice(0,10), dZ=Z.slice(0,10);
-  const o={cons:0,prod:0,imp:0,exp:0,chg:0,dis:0,curt:0,net:0,netExp:0,n:0,nf:0,out:0,slots:0,peak:0,offpeak:0};
+  const o={cons:0,prod:0,imp:0,exp:0,chg:0,dis:0,curt:0,net:0,netExp:0,n:0,nf:0,out:0,slots:0,peak:0,offpeak:0,consN:0,impN:0,netN:0,netExpN:0,ignDays:new Set()};
   const t=cfg.tou, ps=hm2min(t.peakStart)/5, pe=hm2min(t.peakEnd)/5;
   for(let dk=dA; dk<=dZ; dk=addDays(dk,1)){
     const a=M.D[dk], from=dk===dA?sA:0, to=dk===dZ?sZ:NS, wd=wdMon0(dk), we=wd>=5, nm=isNetMeterDay(dk);
@@ -812,8 +807,11 @@ function windowSum(A,Z){
       const im=a.imp[s]*H, ex=a.exp[s]*H;
       if(nm){ o.net+=im; o.netExp+=ex; } else { o.imp+=im; }
       o.exp+=ex;
-      if(!we&&s>=ps&&s<pe) o.peak+=im; else o.offpeak+=im; } }
+      if(!we&&s>=ps&&s<pe) o.peak+=im; else o.offpeak+=im;
+      const g=a.alt||a, imN=g.imp[s]*H, exN=g.exp[s]*H; if(a.alt) o.ignDays.add(dk);
+      o.consN+=g.cons[s]*H; if(nm){ o.netN+=imN; o.netExpN+=exN; } else o.impN+=imN; } }
   o.units=Math.max(0,o.net-o.netExp)+o.imp; o.impRaw=o.net+o.imp;
+  o.unitsN=Math.max(0,o.netN-o.netExpN)+o.impN;
   o.cov=o.slots?(o.n+o.nf)/o.slots:0; o.measured=o.slots?o.n/o.slots:0;
   return o;
 }
@@ -842,7 +840,10 @@ function buildCycles(){
     c.unitsSys=w.units; c.unitsCal=w.units*k; c.cons=w.cons;
     if(c.status==='current'){ const elapsed=(Date.parse(lastT.replace(' ','T')+':00Z')-Date.parse(c.A.replace(' ','T')+':00Z'))/86400000, rem=Math.max(0,c.nDays-elapsed);
       c.elapsed=elapsed; c.rem=rem; c.unitsSoFar=c.unitsCal; c.consSoFar=w.cons;
-      c.unitsCal=c.unitsCal+avg('imp')*k*rem; c.cons=w.cons+avg('cons')*rem; }
+      c.unitsCal=c.unitsCal+avg('imp')*k*rem; c.cons=w.cons+avg('cons')*rem;
+      // ช่วงความไม่แน่นอน: p10–p90 ของการซื้อไฟรายวัน 30 วันล่าสุด
+      const di=goodDays(M.days).slice(-30).map(d=>d.imp);
+      c.unitsLo=c.unitsSoFar+quant(di,0.1)*k*rem; c.unitsHi=c.unitsSoFar+quant(di,0.9)*k*rem; c.early=elapsed<10; }
     else if(c.status==='partial'&&c.pre){ c.exact=true; c.unitsCal=+c.pre.units; c.cons=+c.pre.units+Math.max(0,w.cons-w.units); }
     else if(c.status==='partial'){ const f=Math.max(0.05,1-w.out/w.slots); c.scale=1/f; c.unitsCal=c.unitsCal/f; c.cons=c.cons/f; }
     const units=c.bill?+c.bill.units:c.unitsCal;
@@ -850,6 +851,9 @@ function buildCycles(){
     c.noSolar=billFor(c.cons,c.end); c.saving=c.noSolar-c.actual;
     c.savingNow=billFor(c.cons,today)-billFor(units,today);
     c.diffPct=c.bill&&c.status==='complete'&&c.w.measured>=0.9? (c.unitsSys-c.bill.units)/c.bill.units*100 : null;
+    // ค่าปรับสำหรับ ROI: แทนวันที่ "ไม่นับ" ด้วยค่าจากวันใกล้เคียง (ส่วนต่างบวกบนค่าจริง/บิล)
+    c.ignN=w.ignDays.size; c.consN=c.cons+(w.consN-w.cons); c.unitsN=Math.max(0,units+(w.unitsN-w.units)*k);
+    c.savingN=billFor(c.consN,c.end)-billFor(c.unitsN,c.end); c.savingNowN=billFor(c.consN,today)-billFor(c.unitsN,today);
     c.label=`${thd(c.start)} → ${thd(c.end)}`;
   });
   M.cycles=cyc;
@@ -878,13 +882,14 @@ function computeROI(opt={}){
   const sf=opt.saveFactor||1;
   const idx=opt.price==='era'?null:seasonalIndex();
   let annual, seasonal=false;
-  const meanCons=base.reduce((s,c)=>s+c.cons,0)/base.length, meanUnits=base.reduce((s,c)=>s+c.units,0)/base.length;
+  const meanCons=base.reduce((s,c)=>s+c.consN,0)/base.length, meanUnits=base.reduce((s,c)=>s+c.unitsN,0)/base.length, ignDays=base.reduce((s,c)=>s+c.ignN,0);
   if(idx){ const bIdx=base.reduce((s,c)=>s+idx[+c.end.slice(5,7)],0)/base.length; annual=0;
     for(let m=1;m<=12;m++){ const cons=meanCons*idx[m]/bIdx; annual+=billFor(cons,today)-billFor(meanUnits,today); } seasonal=true; }
-  else annual=base.reduce((s,c)=>s+(opt.price==='era'?c.saving:c.savingNow),0)/base.length*12;
+  else annual=base.reduce((s,c)=>s+(opt.price==='era'?c.savingN:c.savingNowN),0)/base.length*12;
   annual*=sf;
   const esc=(opt.esc!=null?opt.esc:+cfg.escalation||0)/100, deg=(opt.deg!=null?opt.deg:+cfg.degradation||0)/100, Y=opt.horizon||+cfg.horizon||10, nM=Y*12;
   const cf=[-inv]; for(let m=1;m<=nM;m++){ const y=Math.floor((m-1)/12); cf.push(annual/12*Math.pow(1+esc,y)*Math.pow(1-deg,y)); }
+  (opt.replace||[]).forEach(([yr,cost])=>{ const m=Math.round(yr*12); if(cost>0&&m>=1&&m<=nM) cf[m]-=cost; });
   const irr=irrOf(cf), lifetime=cf.slice(1).reduce((a,b)=>a+b,0);
   // เงินที่ประหยัดได้จริงแล้ว (บิลจริงถ้ามี) ตั้งแต่วันเริ่มใช้งาน
   const inst=cfg.installDate||(M.first?M.first.slice(0,10):today);
@@ -893,10 +898,11 @@ function computeROI(opt={}){
     else if(c.status==='partial') realized+=c.exact?c.saving:c.saving/(c.scale||1);
     else if(c.status==='current'){ const so=billFor(c.consSoFar,c.end)-billFor(c.unitsSoFar,c.end); realized+=Math.max(0,so); } });
   let cum=realized, pm=null; const elapsedM=Math.max(0,daysBetween(inst,today)/30.44);
-  for(let m=1;m<=nM*2&&cum<inv;m++){ const y=Math.floor((elapsedM+m-1)/12); cum+=annual/12*Math.pow(1+esc,y)*Math.pow(1-deg,y); if(cum>=inv){ pm=m; break; } }
+  for(let m=1;m<=nM*2&&cum<inv;m++){ const y=Math.floor((elapsedM+m-1)/12), mi=Math.round(elapsedM)+m;
+    (opt.replace||[]).forEach(([yr,cost])=>{ if(cost>0&&Math.round(yr*12)===mi) cum-=cost; }); cum+=annual/12*Math.pow(1+esc,y)*Math.pow(1-deg,y); if(cum>=inv){ pm=m; break; } }
   const paybackYears=pm!=null?(elapsedM+pm)/12:null;
   const payDate=pm!=null?monthShift(today,pm,1).slice(0,7):null;
-  return {inv,annual,monthly:annual/12,irr,lifetime,realized,paybackYears,payDate,base,baseEra,seasonal,meanCons,meanUnits,inst,horizon:Y,esc:esc*100};
+  return {inv,annual,monthly:annual/12,irr,lifetime,realized,paybackYears,payDate,base,baseEra,seasonal,meanCons,meanUnits,ignDays,inst,horizon:Y,esc:esc*100};
 }
 
 /* ======================================================================
@@ -982,8 +988,9 @@ const sgn=n=>(n>0?'+':'')+f1(n);
 const ins=list=>list.map(([t,ic,x])=>`<div class="ins ${t}"><div class="ic">${ic}</div><div>${x}</div></div>`).join('');
 const kpiCards=cards=>cards.map(c=>`<div class="card"><div class="k-label">${c.dot?`<i class="dot ${c.dot}"></i>`:''}${c.l}</div>
   <div class="k-val mono"${c.col?` style="color:${c.col}"`:''}>${c.v}<small> ${c.u||''}</small></div><div class="k-sub">${c.s||''}</div></div>`).join('');
-function toast(msg,type='ok'){ $('toast').innerHTML=`<div class="toast ${type}">${msg}</div>`;
-  if(type==='ok') setTimeout(()=>{ if($('toast').firstChild) $('toast').innerHTML=''; },9000); }
+let __toastT=null;
+function toast(msg,type='ok'){ $('toast').innerHTML=`<div class="toast ${type}">${msg}</div>`; clearTimeout(__toastT);
+  if(type==='ok') __toastT=setTimeout(()=>{ $('toast').innerHTML=''; },9000); }
 const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const charts={};
 function mkChart(id,conf){ if(typeof Chart==='undefined') return null; if(charts[id]) charts[id].destroy();
@@ -1001,6 +1008,11 @@ const curCycle=()=>M&&M.cycles.find(c=>c.end===selCycle)||(M&&M.cycles[M.cycles.
 const cycleDays=c=>c?M.days.filter(d=>d.dayKey>=c.start&&d.dayKey<c.end):[];
 
 function recompute(){ buildModel(); }
+/* ขั้นบันไดแรกของอัตราที่ใช้กับรอบนี้: ราคาต่อหน่วยรวม Ft+VAT ก่อน/หลังข้ามขั้น และงบซื้อไฟต่อวันที่เหลือ */
+function tierInfo(c){ const T1=+((tariffOn(c.end).tiers||[]).map(t=>t.upTo).filter(x=>x!=null&&x!=='').map(Number).sort((a,b)=>a-b)[0])||0; if(!T1) return null;
+  const r1=billFor(T1,c.end)-billFor(T1-1,c.end), r2=billFor(T1+1,c.end)-billFor(T1,c.end);
+  const budget=c.status==='current'&&c.rem>0.5?Math.max(0,T1-c.unitsSoFar)/c.rem:null;
+  return {T1,r1,r2,budget,over:c.units>T1,maybe:c.unitsHi!=null&&c.unitsHi>T1}; }
 function render(){
   const has=M&&M.days.length>0;
   if(!has&&!['home','settings','versions'].includes(currentPage)) currentPage='home';
@@ -1044,11 +1056,15 @@ function renderHome(){
     <div class="split">
       <div><span>หน่วยที่คิดเงิน</span><b class="mono">${f1(c.units)} kWh</b></div>
       ${cur?`<div><span>ซื้อแล้ว (${f1(c.elapsed)}/${c.nDays} วัน)</span><b class="mono">${f1(c.unitsSoFar)} kWh</b></div>`:''}
+      ${cur&&c.unitsLo!=null?`<div><span>ช่วงที่เป็นไปได้ (p10–p90)</span><b class="mono">${f0(c.unitsLo)}–${f0(c.unitsHi)} kWh · ${f0(billFor(c.unitsLo,c.end))}–${f0(billFor(c.unitsHi,c.end))} ฿</b></div>`:''}
       ${c.bill?`<div><span>ระบบวัดได้</span><b class="mono">${f1(c.unitsSys)} kWh (${sgn(c.diffPct||0)}%)</b></div>`:''}
       <div><span>ขั้นบันได / ค่าพลังงาน</span><b class="mono">ขั้น ${bd.topTier} · ${f2(bd.lines.length?bd.energy/c.units:0)} ฿/หน่วย</b></div>
     </div>
     <div class="meta">ค่าพลังงาน ${f2(bd.energy)} + บริการ ${f2(bd.service)} + Ft ${f2(bd.ft)} (${bd.ftRate}) + VAT ${f2(bd.vatAmt)} = ${f2(bd.total)} ฿
-      ${!ftVerified(c.end)?' · Ft รอบนี้ยังไม่ยืนยันกับบิล':''}${!tariffOn(c.end).verified?' · อัตรานี้ยังไม่ยืนยันกับบิล':''}</div>`;
+      ${!ftVerified(c.end)?' · Ft รอบนี้ยังไม่ยืนยันกับบิล':''}${!tariffOn(c.end).verified?' · อัตรานี้ยังไม่ยืนยันกับบิล':''}
+      ${cur&&c.early?`<br>ข้อมูลรอบนี้เพิ่ง ${f1(c.elapsed)} วัน ตัวเลขคาดการณ์ยังแกว่งมาก ให้ดูช่วงที่เป็นไปได้ประกอบ (นิ่งขึ้นหลัง ~10 วัน)`:''}</div>
+    ${(()=>{ const ti=cur?tierInfo(c):null; if(!ti||!(ti.over||ti.maybe)) return '';
+      return `<div class="ins ${ti.over?'bad':'warn'}" style="margin-top:10px"><div class="ic">!</div><div>${ti.over?'คาดว่า':'อาจ'}ซื้อเกิน ${ti.T1} หน่วย — หน่วยที่เกินแพงขึ้นจาก ${f2(ti.r1)} เป็น ${f2(ti.r2)} ฿/หน่วย (รวม Ft+VAT)${ti.budget!=null?` · จะอยู่ในขั้น 1 ได้ถ้าซื้อไม่เกิน ${f1(ti.budget)} kWh/วัน ตลอด ${f1(c.rem)} วันที่เหลือ (ตอนนี้เฉลี่ย ${f1(c.unitsSoFar/Math.max(0.5,c.elapsed))})`:''}</div></div>`; })()}`;
   // ROI card
   const r=computeROI();
   if(!r){ $('roiCard').innerHTML='<div class="cap">ความคุ้มค่า</div><div class="meta">ต้องมีรอบบิลที่ข้อมูลครบอย่างน้อย 1 รอบ</div>'; }
@@ -1184,7 +1200,7 @@ function renderMoney(){
     const d=c.diffPct; const dcol=d==null?'':Math.abs(d)<=5?'neg':'pos';
     return `<tr><td>${c.label}<div class="k-sub">บิล ${thMonth(c.billMonth)} · ${c.nDays} วัน</div></td>
       <td class="mono">${c.bill?f1(c.bill.units):c.pre?f1(c.pre.units):'—'}</td><td class="mono">${f1(c.status==='current'?c.unitsSoFar:c.unitsSys)}${c.status==='current'?'<div class="k-sub">คาดทั้งรอบ '+f1(c.units)+'</div>':''}</td>
-      <td class="mono ${dcol}">${d==null?'—':sgn(d)+'%'}</td><td class="mono">${f0(c.cons)}</td>
+      <td class="mono ${dcol}">${d==null?'—':sgn(d)+'%'}</td><td class="mono">${f0(c.cons)}${c.ignN?`<div class="k-sub">ไม่นับ ${c.ignN} วัน (ROI ใช้ ${f0(c.consN)})</div>`:''}</td>
       <td class="mono">${f2(c.actual)}</td><td class="mono">${f0(c.noSolar)}</td><td class="mono neg">${f0(c.saving)}</td>
       <td class="mono">${pct(c.status==='current'?c.w.n/Math.max(1,c.w.slots-c.w.out):c.w.measured)}%</td><td style="text-align:left">${st}</td></tr>`; }).join('');
   $('cycleNote').innerHTML=`หน้าต่างแต่ละรอบ = [วันอ่านครั้งก่อน ${cfg.billReadTime}, วันอ่านรอบนี้ ${cfg.billReadTime}) ระดับ 5 นาที · ช่วงหมุนย้อน (ถึง ${thd(cfg.netMeterUntil)}) นับหน่วย = ซื้อ − ขายคืน · ช่องข้อมูลขาดเติมด้วยมัธยฐานช่วงเวลาเดียวกันจากวันใกล้เคียง · "ถ้าไม่มีโซลาร์" = การใช้ไฟรวมที่ระบบวัด ผ่านอัตราขั้นบันไดของเดือนบิลนั้น`;
@@ -1224,14 +1240,27 @@ function renderROIDetail(){
   $('roiCnt').textContent=`IRR ${r.irr!=null?(r.irr*100).toFixed(1):'—'}% · คืนทุน ${r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปี':'—'}`;
   const sens=[0,2,4].map(e=>[0.85,1,1.15].map(f=>{ const x=computeROI({esc:e,saveFactor:f}); return x&&x.irr!=null?(x.irr*100).toFixed(1)+'%':'—'; }));
   const pb=[0,2,4].map(e=>{ const x=computeROI({esc:e}); return x&&x.paybackYears!=null?x.paybackYears.toFixed(1):'—'; });
+  const L=cfg.longRun, rep=[[+L.invYear,+L.invCost],[+L.battYear,+L.battCost]], lr=computeROI({horizon:+L.years||25,replace:rep}), noCost=!(+L.invCost>0)||!(+L.battCost>0);
+  const lrBox=`<div class="section-title" style="font-size:14px;margin:16px 0 8px">สถานการณ์ระยะยาว (เทียบกับ ${r.horizon} ปี)</div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field w-xs"><label for="lr_y">คิดกี่ปี</label><input type="number" id="lr_y" data-cfg="longRun.years" value="${L.years}"></div>
+      <div class="field w-xs"><label for="lr_iy">เปลี่ยนอินเวอร์เตอร์ ปีที่</label><input type="number" id="lr_iy" data-cfg="longRun.invYear" value="${L.invYear}"></div>
+      <div class="field w-sm"><label for="lr_ic">ราคา ฿</label><input type="number" id="lr_ic" data-cfg="longRun.invCost" value="${L.invCost}"></div>
+      <div class="field w-xs"><label for="lr_by">เปลี่ยนแบต ปีที่</label><input type="number" id="lr_by" data-cfg="longRun.battYear" value="${L.battYear}"></div>
+      <div class="field w-sm"><label for="lr_bc">ราคา ฿</label><input type="number" id="lr_bc" data-cfg="longRun.battCost" value="${L.battCost}"></div></div>
+    <div class="tablewrap"><table class="compact"><thead><tr><th>สถานการณ์</th><th>IRR</th><th>รวมสุทธิ ฿</th><th style="text-align:left">หมายเหตุ</th></tr></thead><tbody>
+      <tr><td>${r.horizon} ปี (หลัก)</td><td class="mono">${r.irr!=null?(r.irr*100).toFixed(1)+'%':'—'}</td><td class="mono">${f0(r.lifetime)}</td><td style="text-align:left;white-space:normal" class="k-sub">ถือว่าหลังปีที่ ${r.horizon} ระบบไม่มีมูลค่า = กรณีระมัดระวัง</td></tr>
+      <tr><td>${L.years} ปี + ค่าเปลี่ยนอุปกรณ์</td><td class="mono">${lr&&lr.irr!=null?(lr.irr*100).toFixed(1)+'%':'—'}</td><td class="mono">${lr?f0(lr.lifetime):'—'}</td><td style="text-align:left;white-space:normal" class="k-sub">${noCost?'<span class="tag warn">ยังไม่ได้ใส่ราคาเปลี่ยนอุปกรณ์</span> ตัวเลขนี้จึงสูงเกินจริง · ':''}หักค่าเปลี่ยนในปีที่กำหนด · แผง Jinko รับประกันกำลังผลิต 30 ปี (ประกันตัวสินค้า 12 ปี)</td></tr>
+    </tbody></table></div>`;
   box.innerHTML=`
     <div class="calc-step">ประหยัดต่อรอบ = ค่าไฟถ้าไม่มีโซลาร์ (ใช้ไฟรวม ${f0(r.meanCons)} kWh) − ค่าไฟจริง (ซื้อ ${f1(r.meanUnits)} kWh) คิดด้วยอัตรา+Ft ปัจจุบัน</div>
-    <div class="calc-step">ฐาน: ${r.base.map(c=>`${thMonth(c.billMonth)} ${f0(c.savingNow)} ฿`).join(' · ')} → เฉลี่ย ${f0(r.monthly)} ฿/เดือน = ${f0(r.annual)} ฿/ปี</div>
+    <div class="calc-step">ฐาน: ${r.base.map(c=>`${thMonth(c.billMonth)} ${f0(c.savingNowN)} ฿${c.ignN?` (ไม่นับ ${c.ignN} วัน)`:''}`).join(' · ')} → เฉลี่ย ${f0(r.monthly)} ฿/เดือน = ${f0(r.annual)} ฿/ปี${r.ignDays?` · วันที่ตั้ง "ไม่ใช้" ${r.ignDays} วันถูกแทนด้วยค่าจากวันใกล้เคียง`:''}</div>
     <div class="calc-step">กระแสเงินรายเดือน ${r.horizon} ปี: ค่าไฟขึ้น ${r.esc}%/ปี · แผงเสื่อม ${cfg.degradation}%/ปี (คิดลดเงินประหยัดตรง ๆ = ค่าระมัดระวัง) · ลงทุน ${f0(r.inv)} ฿ → IRR ${r.irr!=null?(r.irr*100).toFixed(1):'—'}%/ปี</div>
     <div class="calc-step">ประหยัดได้จริงแล้วตั้งแต่ ${thd(r.inst)}: ${f0(r.realized)} ฿ (บิลจริงเมื่อมี) · ที่เหลือ ${f0(Math.max(0,r.inv-r.realized))} ฿ → คืนทุน ${r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปีนับจากเริ่มใช้ ('+thMonth(r.payDate)+')':'—'}</div>
     <div class="section-title" style="font-size:14px;margin:14px 0 8px">ความอ่อนไหวของ IRR ${r.horizon} ปี</div>
     <div class="tablewrap"><table class="compact"><thead><tr><th>ค่าไฟขึ้น/ปี</th><th>ประหยัด −15%</th><th>ตามฐาน</th><th>ประหยัด +15%</th><th>คืนทุน (ปี)</th></tr></thead><tbody>
       ${[0,2,4].map((e,i)=>`<tr><td class="mono">${e}%</td>${sens[i].map(v=>`<td class="mono">${v}</td>`).join('')}<td class="mono">${pb[i]}</td></tr>`).join('')}</tbody></table></div>
+    ${lrBox}
     <div class="insights">${ins([
       r.seasonal?['good','✓','ปรับฤดูกาลจากประวัติก่อนติดโซลาร์ครบ 12 เดือนแล้ว']:['warn','!',`ฐานยังมีแค่ ${r.base.length} รอบ (ช่วงร้อน/ฝน) ยังไม่ปรับฤดูกาล — เดือน ต.ค.–ก.พ. บ้านนี้เคยใช้ไฟน้อยกว่า ค่าจริงอาจต่ำกว่านี้ ดูคอลัมน์ "ประหยัด −15%" เป็นกรณีระมัดระวัง · ตัวเลขจะนิ่งเมื่อข้อมูลครบ 12 รอบ หรือกรอกประวัติก่อนติดตั้งครบ 12 เดือน`],
       ...(tariffOn(today).verified?[]:[['warn','!',`อัตรา "${esc(tariffOn(today).label)}" ยังไม่ยืนยันกับบิลจริง — เมื่อได้บิล ก.ย. 2569 ให้กรอกเพื่อให้แอปตรวจสูตร`]]),
@@ -1364,11 +1393,11 @@ function renderQuality(){
   if(!M||!M.days.length){ $('qualSummary').textContent=''; $('qualBody').innerHTML=''; return; }
   const bad=M.days.filter(d=>!d.full||d.suspect||d.nf>0&&d.nf>=6);
   const fillC=M.days.reduce((s,d)=>s+(d.cons-d.m.cons),0), fillI=M.days.reduce((s,d)=>s+(d.imp-d.m.imp),0);
-  $('qualSummary').innerHTML=`ครบ ${M.days.filter(d=>d.full).length}/${M.days.length} วัน · เติมค่าประมาณรวม ใช้ไฟ ${f1(fillC)} kWh ซื้อกริด ${f1(fillI)} kWh (${f1(fillI/Math.max(1,M.days.reduce((s,d)=>s+d.imp,0))*100)}% ของที่ซื้อทั้งหมด) · วิธีเติม: มัธยฐานของช่วงเวลาเดียวกันจาก ±7 วัน`;
+  $('qualSummary').innerHTML=`ปุ่ม "ไม่ใช้วันนี้" = ไม่นำวันนั้นไปคิดค่าเฉลี่ยและ ROI (ใช้ค่าจากวันใกล้เคียงแทน) แต่สมุดรอบบิลยังใช้ค่าจริงเพื่อเทียบกับมิเตอร์ · ใช้กับวันที่ข้อมูลเสีย หรือวันที่ไม่ใช่การใช้ไฟปกติ (เช่น ไปต่างจังหวัด)<br>ครบ ${M.days.filter(d=>d.full).length}/${M.days.length} วัน · เติมค่าประมาณรวม ใช้ไฟ ${f1(fillC)} kWh ซื้อกริด ${f1(fillI)} kWh (${f1(fillI/Math.max(1,M.days.reduce((s,d)=>s+d.imp,0))*100)}% ของที่ซื้อทั้งหมด) · วิธีเติม: มัธยฐานของช่วงเวลาเดียวกันจาก ±7 วัน`;
   const gaps=d=>{ const a=d.a, out=[]; let st=null; for(let s=a.lo;s<=a.hi+1;s++){ const miss=s<=a.hi&&!a.has[s]; if(miss&&st===null) st=s; if(!miss&&st!==null){ out.push(`${minToHM(st*5)}–${s*5>=1440?'24:00':minToHM(s*5)}`); st=null; } } return out.slice(0,3).join(', ')+(out.length>3?' …':''); };
   $('qualBody').innerHTML=bad.map(d=>`<tr><td>${thd(d.dayKey)}</td><td class="mono">${pct(d.coverage)}%</td><td class="mono" style="white-space:normal">${gaps(d)||'—'}</td>
     <td class="mono">${f1(d.cons-d.m.cons)} / ${f1(d.imp-d.m.imp)}</td><td class="mono">${f2(d.balMean)} kW</td>
-    <td style="text-align:left" class="k-sub">${d.flat?'โหลดแบนผิดปกติ ':''}${Math.abs(d.balMean)>0.6?'สมดุลพลังงานเพี้ยน ':''}${d.ignored?'ไม่นำมาวิเคราะห์':''}</td>
+    <td style="text-align:left" class="k-sub">${d.flat?'โหลดคงที่ทั้งวัน (อาจไม่อยู่บ้าน) ':''}${Math.abs(d.balMean)>0.6?'สมดุลพลังงานเพี้ยน ':''}${d.ignored?'ไม่นำมาวิเคราะห์':''}</td>
     <td><button class="btn tiny" data-ign="${d.dayKey}">${d.ignored?'นำกลับ':'ไม่ใช้วันนี้'}</button></td></tr>`).join('');
 }
 
@@ -1403,6 +1432,14 @@ function renderReport(){
 
 /* ============================== VERSIONS ============================== */
 const CHANGELOG=[
+  {v:'v11.2',date:'2026-10-06',groups:[
+    ['แก้ไข',['ปุ่ม "ไม่ใช้วันนี้" มีผลกับ ROI และค่าเฉลี่ยแล้ว (ใช้ค่าจากวันใกล้เคียงแทน) ส่วนสมุดรอบบิลยังใช้ค่าจริงเพื่อเทียบมิเตอร์',
+      'ป้ายวันโหลดคงที่ทั้งวันเปลี่ยนเป็น "อาจไม่อยู่บ้าน" — ข้อมูล 2–3 ส.ค. 69 สมดุลพลังงานปกติ SOC 84–100% โหลด ~0.15 kW คือบ้านว่าง ไม่ใช่ข้อมูลเสีย ผู้ใช้เลือกเองว่าจะไม่นับหรือไม่',
+      'นำเข้า backup: ใช้การตั้งค่าจากไฟล์เฉพาะเมื่อไฟล์ export หลังการแก้ค่าครั้งล่าสุดในเครื่อง (กันไฟล์เก่าทับค่าเงินลงทุน/อายุ/เวลาอ่านมิเตอร์) · บิล ประวัติ Ft และวันที่ไม่นับ รวมกันเสมอ',
+      'ตาราง "ทำไมตัวเลขต่างจาก v10": ไฟล์ v10 ที่ผลสรุปเป็นไปไม่ได้ (IRR เกิน 100%, คืนทุนต่ำกว่า 1 ปี) ติดป้ายและไม่ใช้ แอปเลือกไฟล์ล่าสุดที่ค่าสมเหตุผล']],
+    ['เพิ่ม',['ค่าไฟรอบที่กำลังเดิน: แสดงช่วง p10–p90 · เตือนเมื่อข้อมูลยังน้อยกว่า 10 วัน · เตือนก่อนข้ามขั้น 200 หน่วย พร้อมราคาต่อหน่วยก่อน/หลัง และงบซื้อไฟต่อวันที่เหลือ',
+      'สถานการณ์ระยะยาว (เช่น 25 ปี) ใส่ปีและราคาเปลี่ยนอินเวอร์เตอร์/แบตเองได้ เทียบกับกรณีหลัก 10 ปี']],
+    ['ความเป็นส่วนตัว',['เอาข้อมูลบิลที่ฝังในไฟล์ HTML ออก · บิลอยู่ในที่เก็บของเบราว์เซอร์และไฟล์ backup เท่านั้น · รับไฟล์บิลแยก (format solar-eod-bills) เพื่อกู้บิลบนเครื่องใหม่']]]},
   {v:'v11.1',date:'2026-10-05',groups:[
     ['เพิ่ม',['แท็บ "อัปเดตเวอร์ชัน": ผลการอัปเกรดในเครื่องนี้ · ที่มาของตัวเลขที่ต่างจาก v10 (เปลี่ยนทีละเงื่อนไข) · สถานะของทุกค่าที่แอปใช้ · บันทึกการเปลี่ยนแปลง',
       'เมื่อเปิดเวอร์ชันใหม่ครั้งแรก แอปแจ้งสั้น ๆ พร้อมปุ่มมาที่แท็บนี้ แทนข้อความยาวด้านบน']],
@@ -1444,7 +1481,7 @@ function renderVersions(){
       ['C','ฐานเฉพาะระบบปัจจุบัน',run({price:'era'}),`ตัดรอบก่อน ${thd(eraStart())} ออก เหลือรอบที่ 9.1 kWp และไม่หมุนย้อนแล้ว`],
       ['D','ราคาอัตราปัจจุบัน (= v11)',run({}),`คิดทุกรอบด้วยอัตรา "${esc(tariffOn(todayISO()).label)}" + Ft ${ftOn()} — ไฟถูกลง ค่าไฟที่หลีกเลี่ยงได้จึงลดลง`]];
     const row=(k,lab,r,why,cls='')=>`<tr${cls}><td><b>${k}</b> ${lab}</td><td class="mono">${r?f0(r.monthly):'—'}</td><td class="mono">${r&&r.irr!=null?(r.irr*100).toFixed(1)+'%':'—'}</td><td class="mono">${r&&r.paybackYears!=null?r.paybackYears.toFixed(1)+' ปี':'—'}</td><td style="text-align:left;white-space:normal;min-width:280px" class="k-sub">${why}</td></tr>`;
-    $('verBridge').innerHTML=(ps?`<tr class="dim"><td>ค่าที่ ${esc(ps.app)} แสดง</td><td class="mono">${f0(ps.monthly)}</td><td class="mono">${ps.irr!=null?ps.irr+'%':'—'}</td><td class="mono">${ps.payback!=null?ps.payback+' ปี':'—'}</td><td style="text-align:left" class="k-sub">จากไฟล์ backup ที่นำเข้า (เดือนปฏิทิน · ตัดรอบวันที่ 20)</td></tr>`:'')+
+    $('verBridge').innerHTML=(ps?`<tr class="dim"><td>ค่าที่ ${esc(ps.app)} แสดง</td><td class="mono">${ps.bad?'—':f0(ps.monthly)}</td><td class="mono">${ps.bad?'—':ps.irr!=null?ps.irr+'%':'—'}</td><td class="mono">${ps.bad?'—':ps.payback!=null?ps.payback+' ปี':'—'}</td><td style="text-align:left;white-space:normal" class="k-sub">${ps.bad?`<span class="tag bad">ไฟล์นี้มีผลสรุปผิด</span> (${f0(ps.monthly)} ฿/เดือน · IRR ${ps.irr}%) มาจากแถวประวัติรายเดือนที่เสียใน v10 จึงไม่นำมาเทียบ — นำเข้าไฟล์ v10 ที่ถูกต้องเพื่อแสดงแถวนี้`:'จากไฟล์ backup ที่นำเข้า (เดือนปฏิทิน · ตัดรอบวันที่ 20)'}</td></tr>`:'')+
       steps.map(s=>row(...s)).join('');
     const A=steps[0][2], D=steps[3][2];
     $('verBridgeNote').innerHTML=A&&D?`สูตรค่าไฟขั้นบันได PEA 1.1.2 เหมือนเดิมทุกขั้น (ปัดทีละบรรทัดแบบใบแจ้งหนี้ ตรงกับบิลจริง 3 ใบ) · ค่าไฟขึ้น ${cfg.escalation}%/ปีเท่ากันทุกขั้น · ที่ IRR ลดลงส่วนใหญ่มาจากจำนวนปี (A→B) ส่วนเงินประหยัด/เดือนลด ${f0(A.monthly-D.monthly)} ฿ มาจากฐานเดือน (B→C) และอัตราใหม่ (C→D)`:'';
@@ -1475,24 +1512,42 @@ function renderVersions(){
 /* ============================== FILES ============================== */
 function jsonTime(o){ const t=Date.parse(o&&(o.exported_at||(o.meta&&o.meta.exportedAt))||''); return isFinite(t)?t:0; }
 function unionBy(cur,inc,key,prefer){ const m=new Map(); (cur||[]).forEach(x=>m.set(key(x),x)); (inc||[]).forEach(x=>{ const k=key(x), e=m.get(k); m.set(k,e?prefer(e,x):x); }); return [...m.values()]; }
+/* นำเข้า: รายการสะสม (บิล ประวัติ Ft audit วันที่ไม่นับ) รวมกันเสมอ ไม่มีการลบ
+   การตั้งค่าทั่วไปใช้จากไฟล์ก็ต่อเมื่อไฟล์ export หลังการแก้ค่าครั้งล่าสุดในเครื่องนี้ (กันไฟล์เก่าทับค่าปัจจุบัน) */
+function mergeCollections(src){
+  const bills=src.billActuals, aud=src.auditLog, pre=src.preSolar, fts=src.ftEras, ign=src.ignoreDays; let nb=0;
+  if(Array.isArray(bills)){ const before=cfg.billActuals.length;
+    cfg.billActuals=unionBy(cfg.billActuals,bills.filter(b=>b&&b.meterDate&&b.units!=null&&!b.needsReview),b=>b.meterDate,(e,x)=>(x.updatedAt||'')>(e.updatedAt||'')?x:e); nb=cfg.billActuals.length-before; }
+  if(Array.isArray(aud)) cfg.auditLog=unionBy(cfg.auditLog,aud,a=>a.ts+a.action+a.detail,e=>e).sort((a,b)=>a.ts<b.ts?1:-1).slice(0,300);
+  if(Array.isArray(pre)&&pre.length) cfg.preSolar=unionBy(cfg.preSolar,pre,p=>p.date,(e,x)=>x);
+  if(Array.isArray(fts)) cfg.ftEras=unionBy(cfg.ftEras,fts,f=>f.from,(e,x)=>(x.src==='bill'||e.src!=='bill')?x:e);
+  if(Array.isArray(ign)) cfg.ignoreDays=[...new Set([...(cfg.ignoreDays||[]),...ign])];
+  return nb;
+}
+const SETTING_SKIP=['billActuals','auditLog','preSolar','ftEras','ignoreDays','theme','zoom','hc','seenVersion','prevSummary','migratedFrom','settingsAt'];
 function importJSONObject(obj){
-  const mergeIn=(src)=>{ if(!src) return;
-    const bills=src.billActuals, aud=src.auditLog, pre=src.preSolar, fts=src.ftEras;
-    const rest={...src}; delete rest.billActuals; delete rest.auditLog; delete rest.preSolar; delete rest.ftEras;
-    mergeCfg(rest);
-    if(Array.isArray(bills)) cfg.billActuals=unionBy(cfg.billActuals,bills.filter(b=>b&&b.meterDate&&b.units!=null&&!b.needsReview),b=>b.meterDate,(e,x)=>(x.updatedAt||'')>(e.updatedAt||'')||e.source==='seed'?x:e);
-    if(Array.isArray(aud)) cfg.auditLog=unionBy(cfg.auditLog,aud,a=>a.ts+a.action+a.detail,e=>e).sort((a,b)=>a.ts<b.ts?1:-1).slice(0,300);
-    if(Array.isArray(pre)&&pre.length) cfg.preSolar=unionBy(cfg.preSolar,pre,p=>p.date,(e,x)=>x);
-    if(Array.isArray(fts)) cfg.ftEras=unionBy(cfg.ftEras,fts,f=>f.from,(e,x)=>(x.src==='bill'||e.src!=='bill')?x:e);
-    migrateCfg(); };
-  if(obj&&obj.format==='solar-eod-full'&&obj.raw){ mergeIn(obj.cfg); const r=fromColumnar(obj.raw);
-    const ec=obj.summary&&obj.summary.economics; if(ec&&/^v10/.test(obj.app_version||''))
-      cfg.prevSummary={app:obj.app_version,monthly:ec.est_monthly_saving_THB,irr:ec.irr_pct_per_year,payback:ec.payback_years,exportedAt:obj.exported_at};
-    return {ok:true,msg:`ไฟล์ backup ${esc(obj.app_version||'')} · เพิ่ม ${r.add.toLocaleString()} จุด · ซ้ำ ${r.dup.toLocaleString()} จุด`}; }
-  if(obj&&obj.store&&typeof obj.store==='object'){ mergeIn(obj.cfg); let add=0;
+  const t=jsonTime(obj);
+  const mergeIn=(src)=>{ if(!src) return {apply:false,nb:0};
+    const fresh=!Object.keys(store).length&&!cfg.settingsAt&&!(cfg.billActuals||[]).length;
+    const apply=fresh||(t>0&&t>(+cfg.settingsAt||0));
+    if(apply){ const rest={}; Object.keys(src).forEach(k=>{ if(!SETTING_SKIP.includes(k)) rest[k]=src[k]; }); mergeCfg(rest); }
+    const nb=mergeCollections(src);
+    const notes=migrateCfg(); if(apply) cfg.settingsAt=Math.max(t||Date.now(),+cfg.settingsAt||0);
+    logAudit('import',`ไฟล์ ${new Date(t||0).toISOString().slice(0,16)} · การตั้งค่า${apply?'ใช้จากไฟล์':'คงค่าปัจจุบัน'}${nb>0?` · บิลเพิ่ม ${nb}`:''}`);
+    return {apply,nb,notes}; };
+  const tail=m=>` · การตั้งค่า${m.apply?'ใช้จากไฟล์นี้':'คงค่าปัจจุบัน (ไฟล์เก่ากว่าการแก้ค่าล่าสุด)'}${m.nb>0?` · บิลเพิ่ม ${m.nb} ใบ`:''}`;
+  if(obj&&obj.format==='solar-eod-bills'){ const nb=mergeCollections(obj); migrateCfg();
+    return {ok:true,msg:`ไฟล์บิล · เพิ่ม ${nb} ใบ · ประวัติก่อนติดตั้ง ${(obj.preSolar||[]).length} รอบ`}; }
+  if(obj&&obj.format==='solar-eod-full'&&obj.raw){ const m=mergeIn(obj.cfg); const r=fromColumnar(obj.raw);
+    const ec=obj.summary&&obj.summary.economics;
+    if(ec&&/^v10/.test(obj.app_version||'')){ const ok=+ec.irr_pct_per_year>-50&&+ec.irr_pct_per_year<100&&+ec.est_monthly_saving_THB>0&&+ec.est_monthly_saving_THB<20000&&+ec.payback_years>=1;
+      const ps={app:obj.app_version,monthly:ec.est_monthly_saving_THB,irr:ec.irr_pct_per_year,payback:ec.payback_years,exportedAt:obj.exported_at,bad:!ok};
+      if(!cfg.prevSummary||(cfg.prevSummary.bad&&ok)||(ok===!cfg.prevSummary.bad&&(obj.exported_at||'')>(cfg.prevSummary.exportedAt||''))) cfg.prevSummary=ps; }
+    return {ok:true,msg:`ไฟล์ backup ${esc(obj.app_version||'')} · เพิ่ม ${r.add.toLocaleString()} จุด · ซ้ำ ${r.dup.toLocaleString()} จุด`+tail(m)}; }
+  if(obj&&obj.store&&typeof obj.store==='object'){ const m=mergeIn(obj.cfg); let add=0;
     Object.entries(obj.store).forEach(([k,v])=>{ if(v&&v.dayKey&&v.min!=null&&v.min%5===0){ if(store[k]===undefined) add++; store[k]={dayKey:v.dayKey,min:v.min,prod:+v.prod||0,cons:+v.cons||0,grid:+v.grid||0,batt:+v.batt||0,soc:+v.soc||0}; } });
-    return {ok:true,msg:`ไฟล์สำรองรุ่นเก่า · เพิ่ม ${add.toLocaleString()} จุด`}; }
-  return {ok:false,msg:'ไม่รู้จักโครงสร้างไฟล์ JSON นี้ (รับไฟล์ backup จาก v9–v11)'};
+    return {ok:true,msg:`ไฟล์สำรองรุ่นเก่า · เพิ่ม ${add.toLocaleString()} จุด`+tail(m)}; }
+  return {ok:false,msg:'ไม่รู้จักโครงสร้างไฟล์ JSON นี้ (รับไฟล์ backup จาก v9–v11 และไฟล์บิล)'};
 }
 async function handleFiles(files){
   files=[...(files||[])]; if(!files.length) return;
@@ -1564,17 +1619,17 @@ $('dayBody').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-da
 let __t=null;
 document.addEventListener('change',e=>{ const el=e.target;
   if(el.dataset&&el.dataset.cfg){ const v=el.dataset.type==='str'?el.value:(el.value===''?null:+el.value); if(v===null||(typeof v==='number'&&!isFinite(v))) return;
-    setPath(el.dataset.cfg,v); logAudit('setting',`${el.dataset.cfg} = ${v}`);
+    setPath(el.dataset.cfg,v); cfg.settingsAt=Date.now(); logAudit('setting',`${el.dataset.cfg} = ${v}`);
     if(el.dataset.rc||/^(billReadTime|readDay|vat|tou\.)/.test(el.dataset.cfg)) recompute(); else if(/^(socFull)/.test(el.dataset.cfg)) recompute();
     saveState(); render(); return; }
   if(el.dataset.sd!=null){ const i=el.dataset.sd, ins=document.querySelectorAll(`[data-sd="${i}"]`), a=ins[0].value, b=ins[1].value;
-    cfg.ev.sched[i]=a&&b?[a,b]:null; saveState(); render(); return; }
+    cfg.ev.sched[i]=a&&b?[a,b]:null; cfg.settingsAt=Date.now(); saveState(); render(); return; }
   if(el.dataset.era!=null){ const e0=cfg.tariffEras[+el.dataset.era];
     if(el.dataset.tier!=null){ const t=e0.tiers[+el.dataset.tier]; t[el.dataset.tf]=el.dataset.tf==='upTo'&&el.value===''?null:+el.value; }
     else e0[el.dataset.ef]=el.dataset.ef==='service'?+el.value:el.value;
-    e0.verified=false; e0.src='manual'; logAudit('tariff_edit',e0.label); recompute(); saveState(); render(); return; }
+    e0.verified=false; e0.src='manual'; cfg.settingsAt=Date.now(); logAudit('tariff_edit',e0.label); recompute(); saveState(); render(); return; }
   if(el.dataset.ft!=null){ const f=cfg.ftEras.find(x=>x.from===el.dataset.ft); if(!f) return;
-    if(el.dataset.ff==='from') f.from=el.value; else f.ft=+el.value; f.src='manual'; recompute(); saveState(); render(); return; }
+    if(el.dataset.ff==='from') f.from=el.value; else f.ft=+el.value; f.src='manual'; cfg.settingsAt=Date.now(); recompute(); saveState(); render(); return; }
 });
 ['bDate','bUnits','bTotal','bFt'].forEach(id=>$(id).addEventListener('input',billFormCheck));
 $('bSave').addEventListener('click',saveBill);
